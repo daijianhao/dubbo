@@ -20,12 +20,15 @@ import com.alibaba.dubbo.common.extension.SPI;
 
 /**
  * ExporterListener. (SPI, Singleton, ThreadSafe)
+ * <p>
+ * Exporter 监听器
  */
 @SPI
 public interface ExporterListener {
 
     /**
      * The exporter exported.
+     * 当服务暴露完成
      *
      * @param exporter
      * @throws RpcException
@@ -35,6 +38,7 @@ public interface ExporterListener {
 
     /**
      * The exporter unexported.
+     * 当服务取消暴露完成
      *
      * @param exporter
      * @throws RpcException
