@@ -23,17 +23,32 @@ import java.io.Serializable;
 
 /**
  * @export
+ *
+ * 方法参数配置。对应的配置类： org.apache.dubbo.config.ArgumentConfig。该标签为 <dubbo:method> 的子标签，用于方法参数的特征描述，比如：
+ *
+ * <dubbo:method name="findXxx" timeout="3000" retries="2">
+ *     <dubbo:argument index="0" callback="true" />
+ * </dubbo:method>
  */
 public class ArgumentConfig implements Serializable {
 
     private static final long serialVersionUID = -2165482463925213595L;
 
+    /**
+     * 参数索引
+     */
     //argument: index -1 represents not set
     private Integer index = -1;
 
+    /**
+     * 通过参数类型查找参数的index
+     */
     //argument type
     private String type;
 
+    /**
+     * 参数是否为callback接口，如果为callback，服务提供方将生成反向代理，可以从服务提供方反向调用消费方，通常用于事件推送.
+     */
     //callback interface
     private Boolean callback;
 

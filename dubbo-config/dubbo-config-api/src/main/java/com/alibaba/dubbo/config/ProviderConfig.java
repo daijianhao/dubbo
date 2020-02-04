@@ -30,6 +30,8 @@ import java.util.Arrays;
 /**
  * ProviderConfig
  *
+ * 服务提供者缺省值配置
+ *
  * @export
  * @see com.alibaba.dubbo.config.ProtocolConfig
  * @see com.alibaba.dubbo.config.ServiceConfig
@@ -40,6 +42,9 @@ public class ProviderConfig extends AbstractServiceConfig {
 
     // ======== protocol default values, it'll take effect when protocol's attributes are not set ========
 
+    /**
+     * 服务主机名，多网卡选择或指定VIP及域名时使用，为空则自动查找本机IP，建议不要配置，让Dubbo自动获取本机IP
+     */
     // service IP addresses (used when there are multiple network cards available)
     private String host;
 

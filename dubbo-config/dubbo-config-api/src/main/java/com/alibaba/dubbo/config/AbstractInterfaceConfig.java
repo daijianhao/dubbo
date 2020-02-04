@@ -45,8 +45,8 @@ import java.util.Map;
 
 /**
  * AbstractDefaultConfig
- *
- * @export
+ * <p>
+ * 继承 AbstractMethodConfig ，抽象接口配置类
  */
 public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
 
@@ -55,6 +55,10 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     // local impl class name for the service interface
     protected String local;
 
+    /**
+     * 设为true，表示使用缺省代理类名，即：接口名 + Stub后缀，服务接口客户端本地代理类名，用于在客户端执行本地逻辑，如本地缓存等，
+     * 该本地代理类的构造函数必须允许传入远程代理对象，构造函数如：public XxxServiceStub(XxxService xxxService)
+     */
     // local stub class name for the service interface
     protected String stub;
 
@@ -104,6 +108,9 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     // the scope for referring/exporting a service, if it's local, it means searching in current JVM only.
     private String scope;
 
+    /**
+     * 校验 RegistryConfig 配置。实际上，该方法会初始化 RegistryConfig 的配置属性。
+     */
     protected void checkRegistry() {
         // for backward compatibility
         if (registries == null || registries.isEmpty()) {
@@ -127,11 +134,15 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
                     + Version.getVersion()
                     + ", Please add <dubbo:registry address=\"...\" /> to your spring config. If you want unregister, please set <dubbo:service registry=\"N/A\" />");
         }
+        //给每个registry设置属性值
         for (RegistryConfig registryConfig : registries) {
             appendProperties(registryConfig);
         }
     }
 
+    /**
+     * 校验 ApplicationConfig 配置。实际上，该方法会初始化 ApplicationConfig 的配置属性。
+     */
     @SuppressWarnings("deprecation")
     protected void checkApplication() {
         // for backward compatibility
@@ -257,6 +268,11 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         return null;
     }
 
+    /**
+     * 校验接口和方法。主要是两方面：
+     * 1、 接口类非空，并是接口
+     * 2、 方法在接口中已定义
+     */
     protected void checkInterfaceAndMethods(Class<?> interfaceClass, List<MethodConfig> methods) {
         // interface cannot be null
         if (interfaceClass == null) {
@@ -288,6 +304,10 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         }
     }
 
+    /**
+     * 校验 Mock 相关的配置
+     * @param interfaceClass
+     */
     void checkMock(Class<?> interfaceClass) {
         if (ConfigUtils.isEmpty(mock)) {
             return;
@@ -317,6 +337,10 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         }
     }
 
+    /**
+     * 校验 Stub
+     * @param interfaceClass
+     */
     void checkStub(Class<?> interfaceClass) {
         if (ConfigUtils.isNotEmpty(local)) {
             Class<?> localClass = ConfigUtils.isDefault(local) ? ReflectUtils.forName(interfaceClass.getName() + "Local") : ReflectUtils.forName(local);
