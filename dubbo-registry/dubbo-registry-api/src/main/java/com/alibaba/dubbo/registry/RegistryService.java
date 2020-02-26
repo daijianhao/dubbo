@@ -23,6 +23,22 @@ import java.util.List;
 /**
  * RegistryService. (SPI, Prototype, ThreadSafe)
  *
+ * 注册中心服务接口，定义了注册、订阅、查询三种操作方法，如下：
+ *
+ * #register(url) 方法，注册数据，比如：提供者地址，消费者地址，路由规则，覆盖规则，等数据。
+ * #unregister(url) 方法，取消注册。
+ * #subscribe(url, NotifyListener) 方法，订阅符合条件的已注册数据，当有注册数据变更时自动推送。
+ *
+ * #unsubscribe(url, NotifyListener) 方法，取消订阅。
+ * 在 URL.parameters.category 属性上，表示订阅的数据分类。目前有四种类型：
+ * consumers ，服务消费者列表。
+ * providers ，服务提供者列表。
+ * routers ，路由规则列表。
+ * configurations ，配置规则列表。
+ * #lookup(url) 方法，查询符合条件的已注册数据，与订阅的推模式相对应，这里为拉模式，只返回一次结果。
+ *
+ * ps：注意方法上注释的处理契约。
+ *
  * @see com.alibaba.dubbo.registry.Registry
  * @see com.alibaba.dubbo.registry.RegistryFactory#getRegistry(URL)
  */

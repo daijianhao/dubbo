@@ -32,6 +32,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * AbstractRegistryFactory. (SPI, Singleton, ThreadSafe)
+ * 实现 RegistryFactory 接口，RegistryFactory 抽象类，实现了 Registry 的容器管理。
  *
  * @see com.alibaba.dubbo.registry.RegistryFactory
  */
@@ -40,9 +41,15 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
     // Log output
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractRegistryFactory.class);
 
+    /**
+     * 锁，用于 #destroyAll() 和 #getRegistry(url) 方法，对 REGISTRIES 访问的竞争
+     */
     // The lock for the acquisition process of the registry
     private static final ReentrantLock LOCK = new ReentrantLock();
 
+    /**
+     * Registry 集合
+     */
     // Registry Collection Map<RegistryAddress, Registry>
     private static final Map<String, Registry> REGISTRIES = new ConcurrentHashMap<String, Registry>();
 
@@ -57,6 +64,8 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
 
     /**
      * Close all created registries
+     *
+     * 销毁所有 Registry 对象。
      */
     // TODO: 2017/8/30 to move somewhere else better
     public static void destroyAll() {
@@ -80,6 +89,9 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
         }
     }
 
+    /**
+     * 获得注册中心 Registry 对象。优先从缓存中获取，否则进行创建
+     */
     @Override
     public Registry getRegistry(URL url) {
         url = url.setPath(RegistryService.class.getName())
@@ -105,6 +117,9 @@ public abstract class AbstractRegistryFactory implements RegistryFactory {
         }
     }
 
+    /**
+     * 子类实现该方法，创建其对应的 Registry 实现类。例如，ZookeeperRegistryFactory 的该方法，创建 ZookeeperRegistry 对象。
+     */
     protected abstract Registry createRegistry(URL url);
 
 }
