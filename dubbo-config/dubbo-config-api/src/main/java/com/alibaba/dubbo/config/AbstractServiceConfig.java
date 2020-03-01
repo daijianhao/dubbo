@@ -61,6 +61,7 @@ public abstract class AbstractServiceConfig extends AbstractInterfaceConfig {
 
     // access log
     protected String accesslog;
+
     protected List<ProtocolConfig> protocols;
     // max allowed execute times
     private Integer executes;

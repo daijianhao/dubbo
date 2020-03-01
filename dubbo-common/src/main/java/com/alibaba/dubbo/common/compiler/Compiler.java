@@ -21,16 +21,20 @@ import com.alibaba.dubbo.common.extension.SPI;
 
 /**
  * Compiler. (SPI, Singleton, ThreadSafe)
+ * <p>
+ * Dubbo抽象的动态编译接口，用于动态创建类
+ * <dubbo:application compiler="jdk" />
+ * <dubbo:application compiler="javassist" />
  */
-@SPI("javassist")
+@SPI("javassist")//默认采用:javassist，此外还有Jdk实现
 public interface Compiler {
 
     /**
      * Compile java source code.
      *
-     * @param code        Java source code
-     * @param classLoader classloader
-     * @return Compiled class
+     * @param code        Java source code  Java 代码字符串
+     * @param classLoader classloader 类加载器
+     * @return Compiled class 编译后的类
      */
     Class<?> compile(String code, ClassLoader classLoader);
 

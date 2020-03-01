@@ -18,13 +18,16 @@ package com.alibaba.dubbo.common.extension;
 
 /**
  * ExtensionFactory
+ *
+ * 拓展工厂接口
+ * ExtensionFactory 自身也是拓展接口，基于 Dubbo SPI 加载具体拓展实现类。
  */
 @SPI
 public interface ExtensionFactory {
 
     /**
      * Get extension.
-     *
+     *获得拓展对象
      * @param type object type.
      * @param name object name.
      * @return object instance.

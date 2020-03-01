@@ -32,6 +32,8 @@ import java.util.Collections;
 
 /**
  * ListenerProtocol
+ *
+ * 实现 Protocol 接口，Protocol 的 Wrapper 拓展实现类，用于给 Exporter 增加 ExporterListener ，监听 Exporter 暴露完成和取消暴露完成
  */
 public class ProtocolListenerWrapper implements Protocol {
 
@@ -51,10 +53,15 @@ public class ProtocolListenerWrapper implements Protocol {
 
     @Override
     public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
-        if (Constants.REGISTRY_PROTOCOL.equals(invoker.getUrl().getProtocol())) {
+        // 注册中心
+        if (Constants.REGISTRY_PROTOCOL.equals(invoker.getUrl().getProtocol())) {//当 invoker.url.protocl = registry ，跳过，本地暴露服务不会符合这个判断。在远程暴露服务会符合暴露该判断
             return protocol.export(invoker);
         }
+        // 暴露服务，创建 Exporter 对象
+        // 创建带 ExporterListener 的 Exporter 对象
+        //创建带 ExporterListener 的 ListenerExporterWrapper 对象。在这个过程中，会执行 ExporterListener#exported(exporter) 方法
         return new ListenerExporterWrapper<T>(protocol.export(invoker),
+                // 获得 ExporterListener 数组
                 Collections.unmodifiableList(ExtensionLoader.getExtensionLoader(ExporterListener.class)
                         .getActivateExtension(invoker.getUrl(), Constants.EXPORTER_LISTENER_KEY)));
     }

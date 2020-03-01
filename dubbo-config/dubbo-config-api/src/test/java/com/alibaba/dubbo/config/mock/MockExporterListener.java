@@ -21,7 +21,10 @@ import com.alibaba.dubbo.rpc.Exporter;
 import com.alibaba.dubbo.rpc.ExporterListener;
 import com.alibaba.dubbo.rpc.RpcException;
 
-public class MockExporterListener implements ExporterListener  {
+/**
+ * 实现 ExporterListener 接口，ExporterListener 适配器抽象类
+ */
+public class MockExporterListener implements ExporterListener {
     @Override
     public void exported(Exporter<?> exporter) throws RpcException {
 

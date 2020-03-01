@@ -30,6 +30,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Creates a thread pool that reuses a fixed number of threads
+ * <p>
+ * 现 ThreadPool 接口，固定大小线程池，启动时建立线程，不关闭，一直持有
  *
  * @see java.util.concurrent.Executors#newFixedThreadPool(int)
  */
@@ -37,14 +39,17 @@ public class FixedThreadPool implements ThreadPool {
 
     @Override
     public Executor getExecutor(URL url) {
+        // 线程名
         String name = url.getParameter(Constants.THREAD_NAME_KEY, Constants.DEFAULT_THREAD_NAME);
+        // 线程数
         int threads = url.getParameter(Constants.THREADS_KEY, Constants.DEFAULT_THREADS);
+        // 队列容量
         int queues = url.getParameter(Constants.QUEUES_KEY, Constants.DEFAULT_QUEUES);
         return new ThreadPoolExecutor(threads, threads, 0, TimeUnit.MILLISECONDS,
                 queues == 0 ? new SynchronousQueue<Runnable>() :
                         (queues < 0 ? new LinkedBlockingQueue<Runnable>()
-                                : new LinkedBlockingQueue<Runnable>(queues)),
-                new NamedInternalThreadFactory(name, true), new AbortPolicyWithReport(name, url));
+                                : new LinkedBlockingQueue<Runnable>(queues)),//设置队列容量，成为有界队列，避免OOM
+                new NamedInternalThreadFactory(name, true), new AbortPolicyWithReport(name, url));//当任务添加到线程池中被拒绝时
     }
 
 }

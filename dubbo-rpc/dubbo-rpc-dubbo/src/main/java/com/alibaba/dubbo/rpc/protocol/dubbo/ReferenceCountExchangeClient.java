@@ -31,20 +31,39 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * dubbo protocol support class.
+ * <p>
+ * 实现 ExchangeClient 接口，支持指向计数的信息交换客户端实现类。
+ *
+ * 基于装饰器模式，所以，每个实现方法，都是调用 client 的对应的方法
  */
 @SuppressWarnings("deprecation")
 final class ReferenceCountExchangeClient implements ExchangeClient {
-
+    /**
+     * URL
+     */
     private final URL url;
+
+    /**
+     * 指向数量
+     */
     private final AtomicInteger refenceCount = new AtomicInteger(0);
 
     //    private final ExchangeHandler handler;
+
+    /**
+     * 幽灵客户端集合
+     */
     private final ConcurrentMap<String, LazyConnectExchangeClient> ghostClientMap;
+
+    /**
+     * 客户端
+     */
     private ExchangeClient client;
 
 
     public ReferenceCountExchangeClient(ExchangeClient client, ConcurrentMap<String, LazyConnectExchangeClient> ghostClientMap) {
         this.client = client;
+        // 指向加一
         refenceCount.incrementAndGet();
         this.url = client.getUrl();
         if (ghostClientMap == null) {
@@ -148,12 +167,15 @@ final class ReferenceCountExchangeClient implements ExchangeClient {
 
     @Override
     public void close(int timeout) {
+        //计数减一。若无指向，进行真正的关闭。
         if (refenceCount.decrementAndGet() <= 0) {
             if (timeout == 0) {
+                // 关闭 `client`
                 client.close();
             } else {
                 client.close(timeout);
             }
+            // 替换 `client` 为 LazyConnectExchangeClient 对象。
             client = replaceWithLazyClient();
         }
     }

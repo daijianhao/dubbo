@@ -39,14 +39,16 @@ public interface Result {
 
     /**
      * Get exception.
-     *获得返回的异常
+     * 获得返回的异常
+     *
      * @return exception. if no exception return null.
      */
     Throwable getException();
 
     /**
      * Has exception.
-     *是否有异常
+     * 是否有异常
+     *
      * @return has exception.
      */
     boolean hasException();
@@ -61,6 +63,7 @@ public interface Result {
      * return getValue();
      * }
      * </code>
+     * 回放调用结果
      *
      * @return result.
      * @throws if has exception throw it.
@@ -77,7 +80,8 @@ public interface Result {
 
     /**
      * get attachments.
-     *获得返回的隐式参数相关。
+     * 获得返回的隐式参数相关。
+     *
      * @return attachments.
      */
     Map<String, String> getAttachments();

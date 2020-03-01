@@ -29,6 +29,8 @@ import java.util.List;
 
 /**
  * ListenerInvoker
+ *
+ * 实现 Invoker 接口，具有监听器功能的 Invoker 包装器
  */
 public class ListenerInvokerWrapper<T> implements Invoker<T> {
 
@@ -44,6 +46,7 @@ public class ListenerInvokerWrapper<T> implements Invoker<T> {
         }
         this.invoker = invoker;
         this.listeners = listeners;
+        // 执行监听器
         if (listeners != null && !listeners.isEmpty()) {
             for (InvokerListener listener : listeners) {
                 if (listener != null) {
@@ -87,6 +90,7 @@ public class ListenerInvokerWrapper<T> implements Invoker<T> {
         try {
             invoker.destroy();
         } finally {
+            // 执行监听器
             if (listeners != null && !listeners.isEmpty()) {
                 for (InvokerListener listener : listeners) {
                     if (listener != null) {
