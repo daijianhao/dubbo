@@ -31,6 +31,9 @@ import org.apache.catalina.startup.Tomcat;
 
 import java.io.File;
 
+/**
+ * tomcat的httpServer实现
+ */
 public class TomcatHttpServer extends AbstractHttpServer {
 
     private static final Logger logger = LoggerFactory.getLogger(TomcatHttpServer.class);
@@ -45,7 +48,9 @@ public class TomcatHttpServer extends AbstractHttpServer {
         this.url = url;
         DispatcherServlet.addHttpHandler(url.getPort(), handler);
         String baseDir = new File(System.getProperty("java.io.tmpdir")).getAbsolutePath();
+        //创建tomcat实例
         tomcat = new Tomcat();
+        //配置tomcat
         tomcat.setBaseDir(baseDir);
         tomcat.setPort(url.getPort());
         tomcat.getConnector().setProperty(
@@ -63,11 +68,14 @@ public class TomcatHttpServer extends AbstractHttpServer {
         tomcat.getConnector().setProtocol("org.apache.coyote.http11.Http11NioProtocol");
 
         Context context = tomcat.addContext("/", baseDir);
+        //将DispatcherServlet加入
         Tomcat.addServlet(context, "dispatcher", new DispatcherServlet());
+        //配置DispatcherServlet拦截的路径
         context.addServletMapping("/*", "dispatcher");
         ServletManager.getInstance().addServletContext(url.getPort(), context.getServletContext());
 
         try {
+            //启动tomcat
             tomcat.start();
         } catch (LifecycleException e) {
             throw new IllegalStateException("Failed to start tomcat server at " + url.getAddress(), e);

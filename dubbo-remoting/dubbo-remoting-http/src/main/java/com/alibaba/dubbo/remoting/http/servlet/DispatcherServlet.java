@@ -28,6 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Service dispatcher Servlet.
+ *
+ * dubbo自定义的Http请求分发servlet
  */
 public class DispatcherServlet extends HttpServlet {
 
@@ -54,6 +56,7 @@ public class DispatcherServlet extends HttpServlet {
     @Override
     protected void service(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+        //根据端口获取对应的handler
         HttpHandler handler = handlers.get(request.getLocalPort());
         if (handler == null) {// service not found.
             response.sendError(HttpServletResponse.SC_NOT_FOUND, "Service not found.");

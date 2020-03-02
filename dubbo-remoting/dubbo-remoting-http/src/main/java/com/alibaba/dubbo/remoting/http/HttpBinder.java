@@ -23,6 +23,8 @@ import com.alibaba.dubbo.common.extension.SPI;
 
 /**
  * HttpBinder
+ * <p>
+ * 负责将HttpHandler与HttpServer绑定并返回HttpServer对象
  */
 @SPI("jetty")
 public interface HttpBinder {
