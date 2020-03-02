@@ -112,8 +112,10 @@ public class RpcUtils {
                 && invocation.getArguments() != null
                 && invocation.getArguments().length > 0
                 && invocation.getArguments()[0] instanceof String) {
+            // 泛化调用，第一个参数为方法名
             return (String) invocation.getArguments()[0];
         }
+        // 普通调用，直接获得
         return invocation.getMethodName();
     }
 

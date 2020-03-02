@@ -38,41 +38,65 @@ import java.util.concurrent.Future;
 
 /**
  * EventFilter
+ * 事件通知过滤器
+ * <p>
+ * 处理了事件通知相关的配置
+ * 如：onreturn、onthrow、oninvoke的触发
  */
-@Activate(group = Constants.CONSUMER)
+@Activate(group = Constants.CONSUMER)//基于 Dubbo SPI Activate 机制，只有服务消费者才生效该过滤器。
 public class FutureFilter implements Filter {
 
     protected static final Logger logger = LoggerFactory.getLogger(FutureFilter.class);
 
     @Override
     public Result invoke(final Invoker<?> invoker, final Invocation invocation) throws RpcException {
+        // 获得是否异步调用
         final boolean isAsync = RpcUtils.isAsync(invoker.getUrl(), invocation);
 
+        //执行前的事件通知（oninvoke）
         fireInvokeCallback(invoker, invocation);
         // need to configure if there's return value before the invocation in order to help invoker to judge if it's
         // necessary to return future.
+        // 调用方法
         Result result = invoker.invoke(invocation);
-        if (isAsync) {
+        // 触发回调方法
+        if (isAsync) { // 异步回调
             asyncCallback(invoker, invocation);
-        } else {
+        } else {// 同步回调
             syncCallback(invoker, invocation, result);
         }
         return result;
     }
 
+    /**
+     * 同步回调
+     */
     private void syncCallback(final Invoker<?> invoker, final Invocation invocation, final Result result) {
-        if (result.hasException()) {
+        if (result.hasException()) {//异常，触发异常回调
             fireThrowCallback(invoker, invocation, result.getException());
         } else {
+            // 正常，触发正常返回回调
             fireReturnCallback(invoker, invocation, result.getValue());
         }
     }
 
+    /**
+     * 异步回调
+     */
     private void asyncCallback(final Invoker<?> invoker, final Invocation invocation) {
+        //从本次调用的上下文中获取Future
         Future<?> f = RpcContext.getContext().getFuture();
-        if (f instanceof FutureAdapter) {
+        if (f instanceof FutureAdapter) {//如果是FutureAdapter
+            //获取内置的ResponseFuture
             ResponseFuture future = ((FutureAdapter<?>) f).getFuture();
+            //添加回调
             future.setCallback(new ResponseCallback() {
+
+                /**
+                 * 触发正常回调方法
+                 *
+                 * @param rpcResult RPC 结果
+                 */
                 @Override
                 public void done(Object rpcResult) {
                     if (rpcResult == null) {
@@ -86,40 +110,58 @@ public class FutureFilter implements Filter {
                     }
                     Result result = (Result) rpcResult;
                     if (result.hasException()) {
+                        //onthrow事件通知
                         fireThrowCallback(invoker, invocation, result.getException());
                     } else {
+                        //onreturn事件通知
                         fireReturnCallback(invoker, invocation, result.getValue());
                     }
                 }
 
+                /**
+                 * 触发异常回调方法
+                 *
+                 * @param exception 异常
+                 */
                 @Override
                 public void caught(Throwable exception) {
                     fireThrowCallback(invoker, invocation, exception);
                 }
             });
-        }
+        }//不是则不管
     }
 
+    /**
+     * 前置通知，在方法调用前执行
+     */
     private void fireInvokeCallback(final Invoker<?> invoker, final Invocation invocation) {
+        //取得前置通知的方法对象
         final Method onInvokeMethod = (Method) StaticContext.getSystemContext().get(StaticContext.getKey(invoker.getUrl(), invocation.getMethodName(), Constants.ON_INVOKE_METHOD_KEY));
         final Object onInvokeInst = StaticContext.getSystemContext().get(StaticContext.getKey(invoker.getUrl(), invocation.getMethodName(), Constants.ON_INVOKE_INSTANCE_KEY));
 
         if (onInvokeMethod == null && onInvokeInst == null) {
+            //如果没有通知相关配置，直接返回
             return;
         }
         if (onInvokeMethod == null || onInvokeInst == null) {
+            //通知方法或实例其中一个为空则抛异常
             throw new IllegalStateException("service:" + invoker.getUrl().getServiceKey() + " has a onreturn callback config , but no such " + (onInvokeMethod == null ? "method" : "instance") + " found. url:" + invoker.getUrl());
         }
+        //设置通知方法可访问
         if (!onInvokeMethod.isAccessible()) {
             onInvokeMethod.setAccessible(true);
         }
 
+        //取得参数，与被调用的方法参数一样
         Object[] params = invocation.getArguments();
         try {
+            //执行通知
             onInvokeMethod.invoke(onInvokeInst, params);
         } catch (InvocationTargetException e) {
+            //出现异常则执行异常通知
             fireThrowCallback(invoker, invocation, e.getTargetException());
         } catch (Throwable e) {
+            //出现异常则执行异常通知
             fireThrowCallback(invoker, invocation, e);
         }
     }

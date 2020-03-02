@@ -29,9 +29,14 @@ import java.util.concurrent.TimeoutException;
 
 /**
  * FutureAdapter
+ * <p>
+ * 实现 Future 接口，适配 ResponseFuture 。通过这样的方式，对上层调用方，透明化 ResponseFuture 的存在
  */
 public class FutureAdapter<V> implements Future<V> {
 
+    /**
+     * ResponseFuture对象
+     */
     private final ResponseFuture future;
 
     public FutureAdapter(ResponseFuture future) {
@@ -42,11 +47,17 @@ public class FutureAdapter<V> implements Future<V> {
         return future;
     }
 
+    /**
+     * 不能取消？
+     */
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
         return false;
     }
 
+    /**
+     * 不能取消？
+     */
     @Override
     public boolean isCancelled() {
         return false;

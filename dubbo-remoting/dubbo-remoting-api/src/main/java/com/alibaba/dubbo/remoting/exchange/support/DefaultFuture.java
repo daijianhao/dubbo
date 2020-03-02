@@ -48,6 +48,7 @@ public class DefaultFuture implements ResponseFuture {
     private static final Map<Long, DefaultFuture> FUTURES = new ConcurrentHashMap<Long, DefaultFuture>();
 
     static {
+        //开启一个线程，负责扫描异步请求是否已经超时，如果超时则返回超时的响应结果
         Thread th = new Thread(new RemotingInvocationTimeoutScan(), "DubboResponseTimeoutScanTimer");
         th.setDaemon(true);
         th.start();

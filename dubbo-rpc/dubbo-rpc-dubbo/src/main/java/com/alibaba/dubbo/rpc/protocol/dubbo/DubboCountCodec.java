@@ -29,8 +29,26 @@ import com.alibaba.dubbo.rpc.RpcResult;
 
 import java.io.IOException;
 
+/**
+ * 实现 Codec2 接口，支持多消息的编解码器
+ * <p>
+ * 在 Dubbo Client 和 Server 创建的过程，我们看到设置了编解码器为 "dubbo" ，从而通过 Dubbo SPI 机制，加载到 DubboCountCodec 。相关内容如下：
+ * <p>
+ * // DubboProtocol#createServer(...)
+ * url = url.addParameter(Constants.CODEC_KEY, DubboCodec.NAME);
+ * <p>
+ * // DubboProtocol#initClient(...)
+ * url = url.addParameter(Constants.CODEC_KEY, DubboCodec.NAME);
+ * <p>
+ * // META-INF/dubbo/internal/com.alibaba.dubbo.remoting.Codec2
+ * dubbo=com.alibaba.dubbo.rpc.protocol.dubbo.DubboCountCodec
+ * 实际编解码的逻辑，使用 DubboCodec ，即 {@link #codec} 属性。
+ */
 public final class DubboCountCodec implements Codec2 {
 
+    /**
+     * 编解码器
+     */
     private DubboCodec codec = new DubboCodec();
 
     @Override
@@ -40,40 +58,54 @@ public final class DubboCountCodec implements Codec2 {
 
     @Override
     public Object decode(Channel channel, ChannelBuffer buffer) throws IOException {
+        // 记录当前读位置
         int save = buffer.readerIndex();
+        // 创建 MultiMessage 对象
         MultiMessage result = MultiMessage.create();
         do {
+            // 解码
             Object obj = codec.decode(channel, buffer);
+            // 输入不够，重置读进度
             if (Codec2.DecodeResult.NEED_MORE_INPUT == obj) {
                 buffer.readerIndex(save);
                 break;
             } else {
+                // 解析到消息，添加结果消息
                 result.addMessage(obj);
+                //记录消息长度到隐式参数集合，用于 MonitorFilter 监控
                 logMessageLength(obj, buffer.readerIndex() - save);
+                // 记录当前读位置
                 save = buffer.readerIndex();
             }
         } while (true);
+        // 需要更多的输入
         if (result.isEmpty()) {
             return Codec2.DecodeResult.NEED_MORE_INPUT;
         }
+        // 返回解析到的消息
         if (result.size() == 1) {
             return result.get(0);
         }
         return result;
     }
 
+    /**
+     * 记录消息长度到隐式参数集合，用于 MonitorFilter 监控
+     * @param result
+     * @param bytes
+     */
     private void logMessageLength(Object result, int bytes) {
         if (bytes <= 0) {
             return;
         }
-        if (result instanceof Request) {
+        if (result instanceof Request) {//消息是请求时
             try {
                 ((RpcInvocation) ((Request) result).getData()).setAttachment(
                         Constants.INPUT_KEY, String.valueOf(bytes));
             } catch (Throwable e) {
                 /* ignore */
             }
-        } else if (result instanceof Response) {
+        } else if (result instanceof Response) {//消息是响应时
             try {
                 ((RpcResult) ((Response) result).getResult()).setAttachment(
                         Constants.OUTPUT_KEY, String.valueOf(bytes));

@@ -30,6 +30,12 @@
 
     <!-- generate proxy for the remote service, then demoService can be used in the same way as the
     local regular interface -->
-    <dubbo:reference id="demoService" check="false" interface="com.alibaba.dubbo.demo.DemoService"/>
 
+    <bean id ="demoCallback" class = "com.alibaba.dubbo.demo.consumer.NotifyImpl" />
+
+    <dubbo:reference id="demoService" check="false" interface="com.alibaba.dubbo.demo.DemoService" scope="remote">
+        <dubbo:method name="sayHello" async="false" onreturn = "demoCallback.onreturn" onthrow="demoCallback.onthrow" />
+    </dubbo:reference>
+
+    <dubbo:reference id="demo2Service" check="false" interface="com.alibaba.dubbo.demo.Demo2Service" scope="remote"/>
 </beans>
