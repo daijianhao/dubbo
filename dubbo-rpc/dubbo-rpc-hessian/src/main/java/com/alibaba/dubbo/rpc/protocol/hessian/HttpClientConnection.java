@@ -31,9 +31,13 @@ import java.net.URL;
 
 /**
  * HttpClientConnection
+ * 实现 HessianConnection 接口，HttpClient 连接器实现类。
  */
 public class HttpClientConnection implements HessianConnection {
 
+    /**
+     * Apache HttpClient
+     */
     private final HttpClient httpClient;
 
     private final ByteArrayOutputStream output;

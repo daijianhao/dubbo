@@ -24,12 +24,17 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * RMI协议的Invocation
+ */
 public class RmiRemoteInvocation extends RemoteInvocation {
     private static final long serialVersionUID = 1L;
     private static final String dubboAttachmentsAttrName = "dubbo.attachments";
 
     /**
      * executed on consumer side
+     * <p>
+     * 构造将在消费端执行
      */
     public RmiRemoteInvocation(MethodInvocation methodInvocation) {
         super(methodInvocation);
@@ -40,6 +45,9 @@ public class RmiRemoteInvocation extends RemoteInvocation {
      * Need to restore context on provider side (Though context will be overridden by Invocation's attachment
      * when ContextFilter gets executed, we will restore the attachment when Invocation is constructed, check more
      * from {@link com.alibaba.dubbo.rpc.proxy.InvokerInvocationHandler}
+     * <p>
+     * 服务端执行时，重新放入上下文（虽然这时上下文在ContextFilter执行时将被Invocation的attachments覆盖，
+     * 我们在Invocation构造时还原attachments, see InvokerInvocationHandler）
      */
     @SuppressWarnings("unchecked")
     @Override

@@ -50,17 +50,39 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * WebServiceProtocol.
+ *
+ * 基于 WebService 的远程调用协议，基于 Apache CXF 的 frontend-simple 和 transports-http 实现
+ *
+ * 可以和原生 WebService 服务互操作，即：
+ *
+ * 提供者用 Dubbo 的 WebService 协议暴露服务，消费者直接用标准 WebService 接口调用，
+ * 或者提供方用标准 WebService 暴露服务，消费方用 Dubbo 的 WebService 协议调用。
  */
 public class WebServiceProtocol extends AbstractProxyProtocol {
 
+    /**
+     * 默认服务器端口
+     */
     public static final int DEFAULT_PORT = 80;
 
+    /**
+     * Http 服务器集合
+     *
+     * key：ip:port
+     */
     private final Map<String, HttpServer> serverMap = new ConcurrentHashMap<String, HttpServer>();
 
+    /**
+     * 《我眼中的CXF之Bus》http://jnn.iteye.com/blog/94746
+     * 《CXF BUS》https://blog.csdn.net/chen_fly2011/article/details/56664908
+     */
     private final ExtensionManagerBus bus = new ExtensionManagerBus();
 
     private final HTTPTransportFactory transportFactory = new HTTPTransportFactory();
 
+    /**
+     * HttpBinder$Adaptive 对象
+     */
     private HttpBinder httpBinder;
 
     public WebServiceProtocol() {

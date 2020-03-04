@@ -48,6 +48,12 @@ import java.util.concurrent.TimeoutException;
 
 /**
  * RedisProtocol
+ *
+ * 简单的说，通过 Dubbo Service 的调用方式，透明化对 Redis 的访问。
+ * 这样，如果未来希望，修改缓存的解决方案，不用修改代码，而只要修改 Dubbo Service 的配置。
+ * 就好像，Java JDBC API 有 MySQL JDBC 、Oracle JDBC 等多种实现，只需要修改对应的 JDBC 驱动实现类，就可以连接上不同的数据库。
+ *
+ * 另外，Dubbo 提供 memcached:// 协议，和 redis:// 对等，差别点在前者使用 Memcached ，后者使用 Redis 。
  */
 public class RedisProtocol extends AbstractProtocol {
 
@@ -60,6 +66,7 @@ public class RedisProtocol extends AbstractProtocol {
 
     @Override
     public <T> Exporter<T> export(final Invoker<T> invoker) throws RpcException {
+        //实际访问的就是 Redis Server 实例，因此无需进行 Dubbo 服务暴露
         throw new UnsupportedOperationException("Unsupported export redis service. url: " + invoker.getUrl());
     }
 
@@ -67,9 +74,17 @@ public class RedisProtocol extends AbstractProtocol {
         return ExtensionLoader.getExtensionLoader(Serialization.class).getExtension(url.getParameter(Constants.SERIALIZATION_KEY, "java"));
     }
 
+    /**
+     * 在客户端使用，注册中心读取：
+     * <dubbo:reference id="store" interface="java.util.Map" group="member" />
+     *
+     * 或者，点对点直连：
+     * <dubbo:reference id="store" interface="java.util.Map" url="redis://10.20.153.10:6379"
+     */
     @Override
     public <T> Invoker<T> refer(final Class<T> type, final URL url) throws RpcException {
         try {
+            // 创建 GenericObjectPoolConfig 对象，设置配置
             GenericObjectPoolConfig config = new GenericObjectPoolConfig();
             config.setTestOnBorrow(url.getParameter("test.on.borrow", true));
             config.setTestOnReturn(url.getParameter("test.on.return", false));
@@ -94,6 +109,7 @@ public class RedisProtocol extends AbstractProtocol {
                     url.getParameter(Constants.TIMEOUT_KEY, Constants.DEFAULT_TIMEOUT),
                     StringUtils.isBlank(url.getPassword()) ? null : url.getPassword(),
                     url.getParameter("db.index", 0));
+            // 处理方法名的映射
             final int expiry = url.getParameter("expiry", 0);
             final String get = url.getParameter("get", "get");
             final String set = url.getParameter("set", Map.class.equals(type) ? "put" : "set");

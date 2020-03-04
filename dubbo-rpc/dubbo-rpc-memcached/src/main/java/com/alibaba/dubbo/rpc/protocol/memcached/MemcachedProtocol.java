@@ -52,12 +52,21 @@ public class MemcachedProtocol extends AbstractProtocol {
 
     @Override
     public <T> Exporter<T> export(final Invoker<T> invoker) throws RpcException {
+        //实际访问的就是 Memcached Server 实例，因此无需进行 Dubbo 服务暴露
         throw new UnsupportedOperationException("Unsupported export memcached service. url: " + invoker.getUrl());
     }
 
+    /**
+     * 在客户端使用，注册中心读取：
+     * <dubbo:reference id="store" interface="java.util.Map" group="member" />
+     * <p>
+     * 或者，点对点直连：
+     * <dubbo:reference id="store" interface="java.util.Map" url="memcached://10.20.153.10:11211"
+     */
     @Override
     public <T> Invoker<T> refer(final Class<T> type, final URL url) throws RpcException {
         try {
+            // 创建 MemcachedClient 对象
             String address = url.getAddress();
             String backup = url.getParameter(Constants.BACKUP_KEY);
             if (backup != null && backup.length() > 0) {
