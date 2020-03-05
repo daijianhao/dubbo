@@ -516,10 +516,13 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 map.put(Constants.METHODS_KEY, StringUtils.join(new HashSet<String>(Arrays.asList(methods)), ","));
             }
         }
+        //如果设置了令牌校验
         if (!ConfigUtils.isEmpty(token)) {
             if (ConfigUtils.isDefault(token)) {
+                //生成随机令牌
                 map.put(Constants.TOKEN_KEY, UUID.randomUUID().toString());
             } else {
+                //否则使用自定义的令牌
                 map.put(Constants.TOKEN_KEY, token);
             }
         }

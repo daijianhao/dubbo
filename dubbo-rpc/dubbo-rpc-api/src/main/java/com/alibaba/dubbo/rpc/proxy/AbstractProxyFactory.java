@@ -32,6 +32,7 @@ public abstract class AbstractProxyFactory implements ProxyFactory {
 
     /**
      * 获得需要生成代理的接口们
+     *
      * @param invoker
      * @param <T>
      * @return
@@ -59,6 +60,7 @@ public abstract class AbstractProxyFactory implements ProxyFactory {
         }
         // 增加 EchoService 接口，用于回生测试。参见文档《回声测试》http://dubbo.apache.org/zh-cn/docs/user/demos/echo-service.html
         if (interfaces == null) {
+            //将回声测试加入实现的接口中，这样所有服务均实现了EchoService接口
             interfaces = new Class<?>[]{invoker.getInterface(), EchoService.class};
         }
 

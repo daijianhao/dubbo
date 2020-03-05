@@ -216,6 +216,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         }
         // 泛化接口的实现
         if (ProtocolUtils.isGeneric(getGeneric())) {
+            //如果是泛化引用则实现的接口直接是GenericService，因此消费者在拿到service实例后可以直接强转为GenericService类型
             interfaceClass = GenericService.class;
         } else {
             // 普通接口的实现

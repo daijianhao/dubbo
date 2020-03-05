@@ -30,6 +30,8 @@ import java.util.Arrays;
 
 /**
  * Log any invocation timeout, but don't stop server from running
+ *
+ * 实现 Filter 接口，超时过滤器。如果服务调用超时，记录告警日志，不干涉服务的运行
  */
 @Activate(group = Constants.PROVIDER)
 public class TimeoutFilter implements Filter {
@@ -44,6 +46,7 @@ public class TimeoutFilter implements Filter {
         if (invoker.getUrl() != null
                 && elapsed > invoker.getUrl().getMethodParameter(invocation.getMethodName(),
                 "timeout", Integer.MAX_VALUE)) {
+            // 超过时长，打印告警日志
             if (logger.isWarnEnabled()) {
                 logger.warn("invoke time out. method: " + invocation.getMethodName()
                         + " arguments: " + Arrays.toString(invocation.getArguments()) + " , url is "

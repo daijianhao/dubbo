@@ -31,7 +31,7 @@ import javax.ws.rs.container.ContainerRequestFilter;
 import java.io.IOException;
 import java.util.Map;
 
-@Priority(Integer.MIN_VALUE + 1)
+@Priority(Integer.MIN_VALUE + 1)//排在最前面，但在{@link LoggingFilter}之后
 public class RpcContextFilter implements ContainerRequestFilter, ClientRequestFilter {
 
     private static final String DUBBO_ATTACHMENT_HEADER = "Dubbo-Attachments";
@@ -46,6 +46,7 @@ public class RpcContextFilter implements ContainerRequestFilter, ClientRequestFi
 
         // this only works for servlet containers
         if (request != null && RpcContext.getContext().getRemoteAddress() == null) {
+            //在ThreadLocal添加信息
             RpcContext.getContext().setRemoteAddress(request.getRemoteAddr(), request.getRemotePort());
         }
 

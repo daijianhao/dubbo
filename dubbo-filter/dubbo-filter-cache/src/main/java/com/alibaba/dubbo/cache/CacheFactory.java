@@ -23,10 +23,17 @@ import com.alibaba.dubbo.rpc.Invocation;
 
 /**
  * CacheFactory
+ * Cache 工厂接口
  */
 @SPI("lru")
 public interface CacheFactory {
 
+    /**
+     * 获得缓存对象
+     *
+     * @param url URL 对象
+     * @return 缓存对象
+     */
     @Adaptive("cache")
     Cache getCache(URL url, Invocation invocation);
 

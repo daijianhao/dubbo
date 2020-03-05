@@ -41,13 +41,24 @@ import java.util.concurrent.TimeoutException;
  * For example: A invokes B, then B invokes C. On service B, RpcContext saves invocation info from A to B before B
  * starts invoking C, and saves invocation info from B to C after B invokes C.
  *
- * @export
- * @see com.alibaba.dubbo.rpc.filter.ContextFilter
+ * RpcContext，上下文信息
+ *
+ * 上下文中存放的是当前调用过程中所需的环境信息。所有配置信息都将转换为 URL 的参数，参见 schema 配置参考手册 中的对应URL参数一列。
+ *
+ * RpcContext 是一个 ThreadLocal 的临时状态记录器，当接收到 RPC 请求，或发起 RPC 请求时，RpcContext 的状态都会变化。比如：A 调 B，B 再调 C，则 B 机器上，
+ *
+ * 在 B 调 C 之前，RpcContext 记录的是 A 调 B 的信息，
+ * 在 B 调 C 之后，RpcContext 记录的是 B 调 C 的信息。
+ *
  */
 public class RpcContext {
 
     /**
      * use internal thread local to improve performance
+     *
+     * RpcContext 线程变量
+     *
+     * RpcContext 线程变量。初始获得时，返回新的 RpcContext 对象
      */
     private static final InternalThreadLocal<RpcContext> LOCAL = new InternalThreadLocal<RpcContext>() {
         @Override
@@ -62,33 +73,74 @@ public class RpcContext {
         }
     };
 
+    /**
+     * 隐式参数集合
+     */
     private final Map<String, String> attachments = new HashMap<String, String>();
+
+    // 实际未使用
     private final Map<String, Object> values = new HashMap<String, Object>();
+
+    /**
+     * 异步调用 Future
+     */
     private Future<?> future;
 
+    /**
+     * 可调用服务的 URL 对象集合
+     */
     private List<URL> urls;
 
+    /**
+     * 调用服务的 URL 对象
+     */
     private URL url;
 
+    /**
+     * 方法名
+     */
     private String methodName;
 
+    /**
+     * 参数类型数组
+     */
     private Class<?>[] parameterTypes;
 
+    /**
+     * 参数值数组
+     */
     private Object[] arguments;
 
+    /**
+     * 服务消费者地址
+     */
     private InetSocketAddress localAddress;
 
+    /**
+     * 服务提供者地址
+     */
     private InetSocketAddress remoteAddress;
-    @Deprecated
+    @Deprecated // DUBBO-325 废弃的，使用 urls 属性替代
     private List<Invoker<?>> invokers;
-    @Deprecated
+    @Deprecated // DUBBO-325 废弃的，使用 url 属性替代
     private Invoker<?> invoker;
-    @Deprecated
+    @Deprecated // DUBBO-325 废弃的，使用 methodName、parameterTypes、arguments 属性替代
     private Invocation invocation;
 
     // now we don't use the 'values' map to hold these objects
     // we want these objects to be as generic as possible
+    /**
+     * 请求
+     *
+     * 例如，在 RestProtocol
+     */
     private Object request;
+
+    /**
+     * 响应
+     *
+     * 例如，在 RestProtocol
+     */
     private Object response;
 
     protected RpcContext() {

@@ -30,10 +30,20 @@ import com.alibaba.dubbo.validation.Validator;
 
 /**
  * ValidationFilter
+ * <p>
+ * 用于服务消费者和提供者中，提供 参数验证 的功能。在 《Dubbo 用户指南 —— 参数验证》 定义如下：
+ * <p>
+ * 参数验证功能，是基于 JSR303 Bean Validation 实现的，用户只需标识 JSR303 标准的验证 annotation，
+ * 并通过声明 filter 来实现验证。
  */
 @Activate(group = {Constants.CONSUMER, Constants.PROVIDER}, value = Constants.VALIDATION_KEY, order = 10000)
 public class ValidationFilter implements Filter {
 
+    /**
+     * Validation$Adaptive 对象
+     * <p>
+     * 通过 Dubbo SPI 机制，调用 {@link #setValidation(Validation)} 方法，进行注入
+     */
     private Validation validation;
 
     public void setValidation(Validation validation) {
@@ -42,11 +52,13 @@ public class ValidationFilter implements Filter {
 
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
-        if (validation != null && !invocation.getMethodName().startsWith("$")
+        if (validation != null && !invocation.getMethodName().startsWith("$")// 非泛化调用和回音调用等方法
                 && ConfigUtils.isNotEmpty(invoker.getUrl().getMethodParameter(invocation.getMethodName(), Constants.VALIDATION_KEY))) {
             try {
+                // 获得 Validator 对象
                 Validator validator = validation.getValidator(invoker.getUrl());
                 if (validator != null) {
+                    // 使用 Validator ，验证方法参数。若不合法，抛出异常。
                     validator.validate(invocation.getMethodName(), invocation.getParameterTypes(), invocation.getArguments());
                 }
             } catch (RpcException e) {

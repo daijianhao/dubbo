@@ -41,6 +41,8 @@ import java.lang.reflect.Method;
 
 /**
  * GenericImplInvokerFilter
+ *
+ * 在消费者側
  */
 @Activate(group = Constants.CONSUMER, value = Constants.GENERIC_KEY, order = 20000)
 public class GenericImplFilter implements Filter {
@@ -51,6 +53,7 @@ public class GenericImplFilter implements Filter {
 
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        //如果是泛化调用
         String generic = invoker.getUrl().getParameter(Constants.GENERIC_KEY);
         if (ProtocolUtils.isGeneric(generic)
                 && !Constants.$INVOKE.equals(invocation.getMethodName())
@@ -78,6 +81,7 @@ public class GenericImplFilter implements Filter {
             invocation2.setMethodName(Constants.$INVOKE);
             invocation2.setParameterTypes(GENERIC_PARAMETER_TYPES);
             invocation2.setArguments(new Object[]{methodName, types, args});
+            //获取泛化调用的真实目标方法后，在此处实现真的的调用
             Result result = invoker.invoke(invocation2);
 
             if (!result.hasException()) {

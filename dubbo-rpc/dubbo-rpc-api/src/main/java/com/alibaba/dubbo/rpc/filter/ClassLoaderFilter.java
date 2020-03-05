@@ -26,17 +26,25 @@ import com.alibaba.dubbo.rpc.RpcException;
 
 /**
  * ClassLoaderInvokerFilter
+ *
+ * 这个过滤器的作用：
+ * 在设计目的中，切换到加载了接口定义的类加载器，以便实现与相同的类加载器上下文一起工作。
+ * https://github.com/apache/incubator-dubbo/issues/178
  */
 @Activate(group = Constants.PROVIDER, order = -30000)
 public class ClassLoaderFilter implements Filter {
 
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
+        // 获得原来的类加载器
         ClassLoader ocl = Thread.currentThread().getContextClassLoader();
+        // 切换当前线程的类加载器为服务接口的类加载器
         Thread.currentThread().setContextClassLoader(invoker.getInterface().getClassLoader());
         try {
+            // 服务调用
             return invoker.invoke(invocation);
         } finally {
+            // 切换当前线程的类加载器为原来的类加载器
             Thread.currentThread().setContextClassLoader(ocl);
         }
     }

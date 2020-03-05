@@ -68,25 +68,37 @@ import java.util.Set;
 
 /**
  * JValidator
+ *
+ * 实现 Validator 接口，基于 JSR303 的验证器实现类。
  */
 public class JValidator implements Validator {
 
     private static final Logger logger = LoggerFactory.getLogger(JValidator.class);
 
+    /**
+     * 服务接口类
+     */
     private final Class<?> clazz;
 
+    /**
+     * Validator 对象
+     */
     private final javax.validation.Validator validator;
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public JValidator(URL url) {
+        // 获得服务接口类
         this.clazz = ReflectUtils.forName(url.getServiceInterface());
+        // 获得 `"jvalidation"` 配置项
         String jvalidation = url.getParameter("jvalidation");
+        // 获得 ValidatorFactory 对象
         ValidatorFactory factory;
-        if (jvalidation != null && jvalidation.length() > 0) {
+        if (jvalidation != null && jvalidation.length() > 0) {// 指定实现
             factory = Validation.byProvider((Class) ReflectUtils.forName(jvalidation)).configure().buildValidatorFactory();
-        } else {
+        } else { // 默认
             factory = Validation.buildDefaultValidatorFactory();
         }
+        // 获得 javax Validator 对象
         this.validator = factory.getValidator();
     }
 
@@ -235,7 +247,9 @@ public class JValidator implements Validator {
 
     @Override
     public void validate(String methodName, Class<?>[] parameterTypes, Object[] arguments) throws Exception {
+        // 验证分组集合
         List<Class<?>> groups = new ArrayList<Class<?>>();
+        // 【第一种】添加以方法命名的内部接口，作为验证分组。例如 `ValidationService#save(...)` 方法，对应 `ValidationService.Save` 接口。
         String methodClassName = clazz.getName() + "$" + toUpperMethoName(methodName);
         Class<?> methodClass = null;
         try {
@@ -244,6 +258,7 @@ public class JValidator implements Validator {
         } catch (ClassNotFoundException e) {
         }
         Set<ConstraintViolation<?>> violations = new HashSet<ConstraintViolation<?>>();
+        // 【第二种】添加方法的 @MethodValidated 注解的值对应的类，作为验证分组。
         Method method = clazz.getMethod(methodName, parameterTypes);
         Class<?>[] methodClasses = null;
         if (method.isAnnotationPresent(MethodValidated.class)){

@@ -42,6 +42,11 @@ import java.lang.reflect.Method;
  * exception not declared on the interface</li>
  * <li>Wrap the exception not introduced in API package into RuntimeException. Framework will serialize the outer exception but stringnize its cause in order to avoid of possible serialization problem on client side</li>
  * </ol>
+ * <p>
+ * 1.不期望的异常打 ERROR 日志( Provider端 )。不期望的日志即是，没有的接口上声明的Unchecked异常。
+ * 2.异常不在 API 包中，则 Wrap 一层 RuntimeException 。RPC 对于第一层异常会直接序列化传输( Cause 异常会 String 化) ，避免异常在 Client 出不能反序列化问题。
+ * <p>
+ * 🙂 和我们平时业务写的用于捕捉异常的过滤器或者拦截器不太一样，而是关注点在服务消费者会不会出现不存在该异常类，导致反序列化的问题。
  */
 @Activate(group = Constants.PROVIDER)
 public class ExceptionFilter implements Filter {
@@ -59,16 +64,20 @@ public class ExceptionFilter implements Filter {
     @Override
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
         try {
+            //调用服务
             Result result = invoker.invoke(invocation);
+            //有异常并且不是泛化调用
             if (result.hasException() && GenericService.class != invoker.getInterface()) {
                 try {
                     Throwable exception = result.getException();
 
                     // directly throw if it's checked exception
                     if (!(exception instanceof RuntimeException) && (exception instanceof Exception)) {
+                        //如果不是RuntimeException直接抛出
                         return result;
                     }
                     // directly throw if the exception appears in the signature
+                    // 在方法签名上有声明，直接抛出
                     try {
                         Method method = invoker.getInterface().getMethod(invocation.getMethodName(), invocation.getParameterTypes());
                         Class<?>[] exceptionClassses = method.getExceptionTypes();

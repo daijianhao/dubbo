@@ -45,6 +45,8 @@ import java.lang.reflect.Method;
 
 /**
  * GenericInvokerFilter.
+ *
+ * 在服务提供側
  */
 @Activate(group = Constants.PROVIDER, order = -20000)
 public class GenericFilter implements Filter {
@@ -109,6 +111,7 @@ public class GenericFilter implements Filter {
                         }
                     }
                 }
+                //重新包装一个真实调用对象的Invocation，将返回调用转为对应的调用
                 Result result = invoker.invoke(new RpcInvocation(method, args, inv.getAttachments()));
                 if (result.hasException()
                         && !(result.getException() instanceof GenericException)) {
