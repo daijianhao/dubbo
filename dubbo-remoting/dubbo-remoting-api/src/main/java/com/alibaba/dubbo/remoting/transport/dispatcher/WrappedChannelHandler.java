@@ -32,10 +32,16 @@ import com.alibaba.dubbo.remoting.transport.ChannelHandlerDelegate;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * 包装ChannelHandler,添加了一个线程池
+ */
 public class WrappedChannelHandler implements ChannelHandlerDelegate {
 
     protected static final Logger logger = LoggerFactory.getLogger(WrappedChannelHandler.class);
 
+    /**
+     * 这个共享线程池？？？？
+     */
     protected static final ExecutorService SHARED_EXECUTOR = Executors.newCachedThreadPool(new NamedThreadFactory("DubboSharedHandler", true));
 
     protected final ExecutorService executor;
@@ -47,13 +53,16 @@ public class WrappedChannelHandler implements ChannelHandlerDelegate {
     public WrappedChannelHandler(ChannelHandler handler, URL url) {
         this.handler = handler;
         this.url = url;
+        //此处自适应创建线程池
         executor = (ExecutorService) ExtensionLoader.getExtensionLoader(ThreadPool.class).getAdaptiveExtension().getExecutor(url);
 
         String componentKey = Constants.EXECUTOR_SERVICE_COMPONENT_KEY;
         if (Constants.CONSUMER_SIDE.equalsIgnoreCase(url.getParameter(Constants.SIDE_KEY))) {
             componentKey = Constants.CONSUMER_SIDE;
         }
+        //dataSource相当于全局共享的存放数据的地方，实质是一个map
         DataStore dataStore = ExtensionLoader.getExtensionLoader(DataStore.class).getDefaultExtension();
+        //此处把线程池放入DataSource，在创建Server的时候会从中取,此处是先于Server的创建执行的
         dataStore.put(componentKey, Integer.toString(url.getPort()), executor);
     }
 
@@ -112,6 +121,7 @@ public class WrappedChannelHandler implements ChannelHandlerDelegate {
     public ExecutorService getExecutorService() {
         ExecutorService cexecutor = executor;
         if (cexecutor == null || cexecutor.isShutdown()) {
+            //在线程池没有 或者 关闭后 使用共享线程池
             cexecutor = SHARED_EXECUTOR;
         }
         return cexecutor;

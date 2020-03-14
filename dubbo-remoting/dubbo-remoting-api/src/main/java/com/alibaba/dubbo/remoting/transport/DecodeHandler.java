@@ -26,6 +26,11 @@ import com.alibaba.dubbo.remoting.RemotingException;
 import com.alibaba.dubbo.remoting.exchange.Request;
 import com.alibaba.dubbo.remoting.exchange.Response;
 
+/**
+ * 实现 AbstractChannelHandlerDelegate 抽象类，解码处理器，处理接收到的消息，实现了 Decodeable 接口的情况。
+ * <p>
+ * 覆写了 #received(channel, message) 方法
+ */
 public class DecodeHandler extends AbstractChannelHandlerDelegate {
 
     private static final Logger log = LoggerFactory.getLogger(DecodeHandler.class);
@@ -48,6 +53,7 @@ public class DecodeHandler extends AbstractChannelHandlerDelegate {
             decode(((Response) message).getResult());
         }
 
+        //将消息交给委托的 handler ，继续处理。🙂 胖友是否感受到，装饰器模式的好处：通过组合的方式，实现功能的叠加。
         handler.received(channel, message);
     }
 

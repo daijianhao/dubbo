@@ -30,6 +30,15 @@ import java.net.InetSocketAddress;
 
 /**
  * AbstractCodec
+ *
+ * 实现 Codec2 接口，提供如下公用方法：
+ *
+ * #checkPayload(channel, size) 静态方法，校验消息长度。
+ * #getSerialization(channel) 方法，获得 Serialization 对象。
+ * #isClientSide(channel) 方法，是否为客户端侧的通道。
+ * #isServerSide(channel) 方法，是否为服务端侧的通道。
+ *
+ * 编解码器的实现，通过继承的方式，获得更多的功能。每一个 Codec2 类实现对不同消息的编解码。通过协议头来判断，具体使用哪个编解码逻辑
  */
 public abstract class AbstractCodec implements Codec2 {
 

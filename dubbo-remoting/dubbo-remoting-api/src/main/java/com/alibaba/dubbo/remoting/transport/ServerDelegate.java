@@ -28,7 +28,7 @@ import java.util.Collection;
 /**
  * ServerDelegate
  *
- *
+ 实现 Server 接口，服务端装饰者实现类
  */
 public class ServerDelegate implements Server {
 

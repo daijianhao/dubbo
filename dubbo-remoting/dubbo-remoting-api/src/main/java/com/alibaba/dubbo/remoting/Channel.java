@@ -21,7 +21,10 @@ import java.net.InetSocketAddress;
 /**
  * Channel. (API/SPI, Prototype, ThreadSafe)
  *
+ *继承 Endpoint 接口，通道接口
  *
+ * 和 Netty Channel 一致，通讯的载体。在后面的文章，我们会看到在 dubbo-remoting-netty4 项目中，NettyChannel 是 Dubbo Channel 的实现，
+ * 内部有真正的 Netty Channel 属性，用于通讯。
  *
  * @see com.alibaba.dubbo.remoting.Client
  * @see com.alibaba.dubbo.remoting.Server#getChannels()

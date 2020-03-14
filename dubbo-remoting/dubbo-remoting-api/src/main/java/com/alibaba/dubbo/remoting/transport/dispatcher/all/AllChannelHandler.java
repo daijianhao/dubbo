@@ -30,6 +30,11 @@ import com.alibaba.dubbo.remoting.transport.dispatcher.WrappedChannelHandler;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 
+/**
+ * 装饰器模式，将handler为 all 派发策略的handler
+ *
+ * 主要就是将所有处理都放入线程池完成
+ */
 public class AllChannelHandler extends WrappedChannelHandler {
 
     public AllChannelHandler(ChannelHandler handler, URL url) {
@@ -38,8 +43,10 @@ public class AllChannelHandler extends WrappedChannelHandler {
 
     @Override
     public void connected(Channel channel) throws RemotingException {
+        //取得线程池
         ExecutorService cexecutor = getExecutorService();
         try {
+            //创建连接事件，放入线程池执行
             cexecutor.execute(new ChannelEventRunnable(channel, handler, ChannelState.CONNECTED));
         } catch (Throwable t) {
             throw new ExecutionException("connect event", channel, getClass() + " error when process connected event .", t);
@@ -67,6 +74,7 @@ public class AllChannelHandler extends WrappedChannelHandler {
         	if(message instanceof Request && t instanceof RejectedExecutionException){
         		Request request = (Request)message;
         		if(request.isTwoWay()){
+        		    //向客户端响应线程池满了的异常
         			String msg = "Server side(" + url.getIp() + "," + url.getPort() + ") threadpool is exhausted ,detail msg:" + t.getMessage();
         			Response response = new Response(request.getId(), request.getVersion());
         			response.setStatus(Response.SERVER_THREADPOOL_EXHAUSTED_ERROR);

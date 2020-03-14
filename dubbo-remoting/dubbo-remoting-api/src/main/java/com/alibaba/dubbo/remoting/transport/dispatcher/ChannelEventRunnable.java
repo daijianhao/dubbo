@@ -21,12 +21,27 @@ import com.alibaba.dubbo.common.logger.LoggerFactory;
 import com.alibaba.dubbo.remoting.Channel;
 import com.alibaba.dubbo.remoting.ChannelHandler;
 
+/**
+ * 主要是将dispatcher收到的 连接、断开连接、收到消息、发送消息和异常 等事件封装，然后就可以放入线程池执行
+ */
 public class ChannelEventRunnable implements Runnable {
     private static final Logger logger = LoggerFactory.getLogger(ChannelEventRunnable.class);
 
+    /**
+     * 通道处理器
+     */
     private final ChannelHandler handler;
+    /**
+     * 通道
+     */
     private final Channel channel;
+    /**
+     * 状态
+     */
     private final ChannelState state;
+    /**
+     * 异常
+     */
     private final Throwable exception;
     private final Object message;
 
@@ -54,12 +69,14 @@ public class ChannelEventRunnable implements Runnable {
     public void run() {
         if (state == ChannelState.RECEIVED) {
             try {
+                //收到消息，调用handler处理
                 handler.received(channel, message);
             } catch (Exception e) {
                 logger.warn("ChannelEventRunnable handle " + state + " operation error, channel is " + channel
                         + ", message is " + message, e);
             }
         } else {
+            //其他同理
             switch (state) {
             case CONNECTED:
                 try {

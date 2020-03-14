@@ -29,15 +29,25 @@ import com.alibaba.dubbo.remoting.transport.codec.CodecAdapter;
 
 /**
  * AbstractEndpoint
+ * 实现 Resetable 接口，继承 AbstractPeer 抽象类，端点抽象类。
  */
 public abstract class AbstractEndpoint extends AbstractPeer implements Resetable {
 
     private static final Logger logger = LoggerFactory.getLogger(AbstractEndpoint.class);
 
+    /**
+     * 编解码器
+     */
     private Codec2 codec;
 
+    /**
+     * 超时时间
+     */
     private int timeout;
 
+    /**
+     * 连接超时时间
+     */
     private int connectTimeout;
 
     public AbstractEndpoint(URL url, ChannelHandler handler) {

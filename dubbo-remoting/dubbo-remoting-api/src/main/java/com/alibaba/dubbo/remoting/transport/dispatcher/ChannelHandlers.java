@@ -24,8 +24,18 @@ import com.alibaba.dubbo.remoting.Dispatcher;
 import com.alibaba.dubbo.remoting.exchange.support.header.HeartbeatHandler;
 import com.alibaba.dubbo.remoting.transport.MultiMessageHandler;
 
+/**
+ * 通道处理器工厂
+ *
+ * 无论 Client 还是 Server ，都是类似的，将传入的 handler ，最终使用 ChannelHandlers 进行一次包装
+ *
+ * 实际上是负责将handler包装，使其拥有心跳检测和多消息处理功能
+ */
 public class ChannelHandlers {
 
+    /**
+     * 单例
+     */
     private static ChannelHandlers INSTANCE = new ChannelHandlers();
 
     protected ChannelHandlers() {
@@ -44,6 +54,7 @@ public class ChannelHandlers {
     }
 
     protected ChannelHandler wrapInternal(ChannelHandler handler, URL url) {
+        //实际上也是返回一个 ChannelHandlerDelegate 对象
         return new MultiMessageHandler(new HeartbeatHandler(ExtensionLoader.getExtensionLoader(Dispatcher.class)
                 .getAdaptiveExtension().dispatch(handler, url)));
     }

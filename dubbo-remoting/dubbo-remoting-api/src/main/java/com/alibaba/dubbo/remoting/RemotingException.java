@@ -29,13 +29,21 @@ import java.net.InetSocketAddress;
  * @see com.alibaba.dubbo.remoting.exchange.ExchangeChannel#request(Object, int)
  * @see com.alibaba.dubbo.remoting.Transporter#bind(com.alibaba.dubbo.common.URL, ChannelHandler)
  * @see com.alibaba.dubbo.remoting.Transporter#connect(com.alibaba.dubbo.common.URL, ChannelHandler)
+ *
+ * 实现 Exception 类，dubbo-remoting-api 的基础异常
  */
 public class RemotingException extends Exception {
 
     private static final long serialVersionUID = -3160452149606778709L;
 
+    /**
+     * 本地地址
+     */
     private InetSocketAddress localAddress;
 
+    /**
+     * 远程地址
+     */
     private InetSocketAddress remoteAddress;
 
     public RemotingException(Channel channel, String msg) {

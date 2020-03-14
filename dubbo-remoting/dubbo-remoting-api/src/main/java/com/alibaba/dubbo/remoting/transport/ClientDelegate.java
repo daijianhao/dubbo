@@ -25,6 +25,10 @@ import java.net.InetSocketAddress;
 
 /**
  * ClientDelegate
+ *
+ * 实现 Client 接口，客户端装饰者实现类。在每个实现的方法里，直接调用被装饰的 client 属性的方法
+ *
+ * 目前 dubbo-rpc-default 模块中，ChannelWrapper 继承了 ClientDelegate 类。但实际上，ChannelWrapper 重新实现了所有的方法，并且，并未复用任何方法。所以，ClientDelegate 目前用途不大。
  */
 public class ClientDelegate implements Client {
 

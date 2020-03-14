@@ -22,6 +22,7 @@ import com.alibaba.dubbo.remoting.Dispatcher;
 
 /**
  * default thread pool configure
+ * 装饰器模式，将传入的handler包装为all分发策略的handler
  */
 public class AllDispatcher implements Dispatcher {
 
