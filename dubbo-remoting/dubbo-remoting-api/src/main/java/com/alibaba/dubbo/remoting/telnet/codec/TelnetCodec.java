@@ -35,17 +35,32 @@ import java.util.List;
 
 /**
  * TelnetCodec
+ *
+ * 实现 TransportCodec 类，Telnet 命令编解码器。
+ *
+ * 解码
  */
 public class TelnetCodec extends TransportCodec {
 
     private static final Logger logger = LoggerFactory.getLogger(TelnetCodec.class);
 
+    /**
+     * 历史命令列表对应的key
+     */
     private static final String HISTORY_LIST_KEY = "telnet.history.list";
 
+    /**
+     * 历史命令位置（用户向上或向下）
+     */
     private static final String HISTORY_INDEX_KEY = "telnet.history.index";
 
+    /**
+     * 向上
+     */
     private static final byte[] UP = new byte[]{27, 91, 65};
-
+    /**
+     * 向下
+     */
     private static final byte[] DOWN = new byte[]{27, 91, 66};
 
     private static final List<?> ENTER = Arrays.asList(new Object[]{new byte[]{'\r', '\n'} /* Windows Enter */, new byte[]{'\n'} /* Linux Enter */});
@@ -138,6 +153,7 @@ public class TelnetCodec extends TransportCodec {
 
     @Override
     public void encode(Channel channel, ChannelBuffer buffer, Object message) throws IOException {
+        //命令结果
         if (message instanceof String) {
             if (isClientSide(channel)) {
                 message = message + "\r\n";
@@ -159,16 +175,19 @@ public class TelnetCodec extends TransportCodec {
 
     @SuppressWarnings("unchecked")
     protected Object decode(Channel channel, ChannelBuffer buffer, int readable, byte[] message) throws IOException {
+        // 【TODO 8025】为啥 client 侧，直接返回
         if (isClientSide(channel)) {
             return toString(message, getCharset(channel));
         }
+        // 检查长度
         checkPayload(channel, readable);
         if (message == null || message.length == 0) {
             return DecodeResult.NEED_MORE_INPUT;
         }
-
+        // 处理退格的情况
         if (message[message.length - 1] == '\b') { // Windows backspace echo
             try {
+                // 32=空格 8=退格
                 boolean doublechar = message.length >= 3 && message[message.length - 3] < 0; // double byte char
                 channel.send(new String(doublechar ? new byte[]{32, 32, 8, 8} : new byte[]{32, 8}, getCharset(channel).name()));
             } catch (RemotingException e) {
@@ -177,6 +196,7 @@ public class TelnetCodec extends TransportCodec {
             return DecodeResult.NEED_MORE_INPUT;
         }
 
+        // 关闭指令
         for (Object command : EXIT) {
             if (isEquals(message, (byte[]) command)) {
                 if (logger.isInfoEnabled()) {
@@ -187,13 +207,16 @@ public class TelnetCodec extends TransportCodec {
             }
         }
 
+        // 使用历史的命令
         boolean up = endsWith(message, UP);
         boolean down = endsWith(message, DOWN);
         if (up || down) {
+            //取出历史记录
             LinkedList<String> history = (LinkedList<String>) channel.getAttribute(HISTORY_LIST_KEY);
             if (history == null || history.isEmpty()) {
                 return DecodeResult.NEED_MORE_INPUT;
             }
+            // 获得历史命令数组的位置
             Integer index = (Integer) channel.getAttribute(HISTORY_INDEX_KEY);
             Integer old = index;
             if (index == null) {
@@ -269,6 +292,7 @@ public class TelnetCodec extends TransportCodec {
             }
         }
         String result = toString(message, getCharset(channel));
+        // 获得历史命令，并发送给客户端
         if (result.trim().length() > 0) {
             if (history == null) {
                 history = new LinkedList<String>();
