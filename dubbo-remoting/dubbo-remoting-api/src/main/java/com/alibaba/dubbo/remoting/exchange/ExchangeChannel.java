@@ -21,11 +21,27 @@ import com.alibaba.dubbo.remoting.RemotingException;
 
 /**
  * ExchangeChannel. (API/SPI, Prototype, ThreadSafe)
+ * <p>
+ * 在一次 RPC 调用，每个请求( Request )，是关注对应的响应( Response )。那么 transport 层 提供的网络传输 功能，是无法满足 RPC 的诉求的。因此，exchange 层，在其 Message 之上，构造了Request-Response 的模型。
+ * <p>
+ * 实现上，也非常简单，将 Message 分成 Request 和 Response 两种类型，并增加编号属性，将 Request 和 Response 能够一一映射。
+ * <p>
+ * 实际上，RPC 调用，会有更多特性的需求：1）异步处理返回结果；2）内置事件；3）等等。因此，Request 和 Response 上会有类似编号的系统字段。
+ * <p>
+ * 一条消息，我们分成两段：
+ * <p>
+ * 协议头( Header ) ： 系统字段，例如编号等。
+ * 内容( Body ) ：具体请求的参数和响应的结果等。
+ * <p>
+ * <p>
+ * 继承 Channel 接口，信息交换通道接口
  */
 public interface ExchangeChannel extends Channel {
 
     /**
      * send request.
+     * <p>
+     * // 发送请求
      *
      * @param request
      * @return response future
@@ -35,6 +51,8 @@ public interface ExchangeChannel extends Channel {
 
     /**
      * send request.
+     * <p>
+     * // 发送请求
      *
      * @param request
      * @param timeout
@@ -45,13 +63,16 @@ public interface ExchangeChannel extends Channel {
 
     /**
      * get message handler.
+     * 获得信息交换处理器
      *
      * @return message handler
      */
+
     ExchangeHandler getExchangeHandler();
 
     /**
      * graceful close.
+     * 优雅关闭
      *
      * @param timeout
      */

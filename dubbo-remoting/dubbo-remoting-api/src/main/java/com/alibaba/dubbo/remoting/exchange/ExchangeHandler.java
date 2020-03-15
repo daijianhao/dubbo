@@ -26,12 +26,8 @@ import com.alibaba.dubbo.remoting.telnet.TelnetHandler;
 public interface ExchangeHandler extends ChannelHandler, TelnetHandler {
 
     /**
-     * reply.
-     *
-     * @param channel
-     * @param request
-     * @return response
-     * @throws RemotingException
+     * 注意，返回的是请求结果。正如我们在上文看到的，将请求结果，设置到 Response.mResult 属性中。
+     * ExchangeHandler 是一个非常关键的接口。为什么这么说呢，点击 DubboProtocol. requestHandler ！胖友，领悟到了么？
      */
     Object reply(ExchangeChannel channel, Object request) throws RemotingException;
 
