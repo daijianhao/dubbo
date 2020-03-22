@@ -19,6 +19,9 @@ package com.alibaba.dubbo.remoting.buffer;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Buffer 工具类，提供创建、比较 ChannelBuffer 等公用方法
+ */
 public final class ChannelBuffers {
 
     public static final ChannelBuffer EMPTY_BUFFER = new HeapChannelBuffer(0);
@@ -26,10 +29,18 @@ public final class ChannelBuffers {
     private ChannelBuffers() {
     }
 
+    /**
+     * 实际创建的是Heap类型的buffer
+     * @return
+     */
     public static ChannelBuffer dynamicBuffer() {
         return dynamicBuffer(256);
     }
 
+    /**
+     * 实际创建的是Heap类型的buffer
+     * @return
+     */
     public static ChannelBuffer dynamicBuffer(int capacity) {
         return new DynamicChannelBuffer(capacity);
     }
@@ -79,6 +90,9 @@ public final class ChannelBuffers {
         }
     }
 
+    /**
+     * 创建基于直接内存的buffer
+     */
     public static ChannelBuffer directBuffer(int capacity) {
         if (capacity == 0) {
             return EMPTY_BUFFER;

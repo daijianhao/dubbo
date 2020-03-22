@@ -198,13 +198,17 @@ import java.nio.ByteBuffer;
  * <p/>
  * Please refer to {@link ChannelBufferInputStream} and {@link
  * ChannelBufferOutputStream}.
+ * <p>
+ * 实现 Comparable 接口，通道 Buffer 接口
  *
- *
+ * ChannelBuffer 在接口方法的定义上，主要参考了 Netty 的 ByteBuf 进行设计，所以接口和注释基本一致
  */
 public interface ChannelBuffer extends Comparable<ChannelBuffer> {
 
     /**
      * Returns the number of bytes (octets) this buffer can contain.
+     *
+     * 返回容量
      */
     int capacity();
 
@@ -216,6 +220,8 @@ public interface ChannelBuffer extends Comparable<ChannelBuffer> {
      * Please note that the behavior of this method is different from that of
      * NIO buffer, which sets the {@code limit} to the {@code capacity} of the
      * buffer.
+     *
+     * 清除
      */
     void clear();
 
@@ -225,6 +231,8 @@ public interface ChannelBuffer extends Comparable<ChannelBuffer> {
      * This method is identical to {@code buf.copy(buf.readerIndex(),
      * buf.readableBytes())}. This method does not modify {@code readerIndex} or
      * {@code writerIndex} of this buffer.
+     *
+     * 复制
      */
     ChannelBuffer copy();
 
@@ -233,6 +241,8 @@ public interface ChannelBuffer extends Comparable<ChannelBuffer> {
      * returned buffer or this buffer does not affect each other at all. This
      * method does not modify {@code readerIndex} or {@code writerIndex} of this
      * buffer.
+     *
+     * 复制指定范围
      */
     ChannelBuffer copy(int index, int length);
 
@@ -243,6 +253,8 @@ public interface ChannelBuffer extends Comparable<ChannelBuffer> {
      * {@code 0} and {@code oldWriterIndex - oldReaderIndex} respectively.
      * <p/>
      * Please refer to the class documentation for more detailed explanation.
+     *
+     * 废弃所有可读字节
      */
     void discardReadBytes();
 
@@ -280,6 +292,8 @@ public interface ChannelBuffer extends Comparable<ChannelBuffer> {
     /**
      * Returns the factory which creates a {@link ChannelBuffer} whose type and
      * default {@link java.nio.ByteOrder} are same with this buffer.
+     *
+     * 用于逻辑中，需要创建 ChannelBuffer 的情况
      */
     ChannelBufferFactory factory();
 

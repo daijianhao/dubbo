@@ -34,15 +34,30 @@ import java.util.concurrent.ConcurrentMap;
 
 /**
  * NettyChannel.
+ *
+ * 封装 Netty Channel 的通道实现类。
+ *
+ * NettyChannel 和 HeaderExchangeChannel 很类似
  */
 final class NettyChannel extends AbstractChannel {
 
     private static final Logger logger = LoggerFactory.getLogger(NettyChannel.class);
 
+    /**
+     * 通道集合
+     */
     private static final ConcurrentMap<Channel, NettyChannel> channelMap = new ConcurrentHashMap<Channel, NettyChannel>();
 
+    /**
+     * 通道
+     *
+     * NettyChannel 是传入 channel 属性的装饰器，每个实现的方法，都会调用 channel
+     */
     private final Channel channel;
 
+    /**
+     * 属性集合
+     */
     private final Map<String, Object> attributes = new ConcurrentHashMap<String, Object>();
 
     private NettyChannel(Channel channel, URL url, ChannelHandler handler) {
@@ -53,6 +68,9 @@ final class NettyChannel extends AbstractChannel {
         this.channel = channel;
     }
 
+    /**
+     * 创建 NettyChannel 对象
+     */
     static NettyChannel getOrAddChannel(Channel ch, URL url, ChannelHandler handler) {
         if (ch == null) {
             return null;
@@ -60,8 +78,8 @@ final class NettyChannel extends AbstractChannel {
         NettyChannel ret = channelMap.get(ch);
         if (ret == null) {
             NettyChannel nettyChannel = new NettyChannel(ch, url, handler);
-            if (ch.isActive()) {
-                ret = channelMap.putIfAbsent(ch, nettyChannel);
+            if (ch.isActive()) {// 连接中
+                ret = channelMap.putIfAbsent(ch, nettyChannel); // 添加到 channelMap
             }
             if (ret == null) {
                 ret = nettyChannel;
@@ -70,6 +88,9 @@ final class NettyChannel extends AbstractChannel {
         return ret;
     }
 
+    /**
+     * 移除 NettyChannel 对象
+     */
     static void removeChannelIfDisconnected(Channel ch) {
         if (ch != null && !ch.isActive()) {
             channelMap.remove(ch);
@@ -93,16 +114,20 @@ final class NettyChannel extends AbstractChannel {
 
     @Override
     public void send(Object message, boolean sent) throws RemotingException {
+        // 检查连接状态
         super.send(message, sent);
 
-        boolean success = true;
+        boolean success = true;// 如果没有等待发送成功，默认成功。
         int timeout = 0;
         try {
+            // 发送消息
             ChannelFuture future = channel.writeAndFlush(message);
             if (sent) {
+                // 等待发送成功
                 timeout = getUrl().getPositiveParameter(Constants.TIMEOUT_KEY, Constants.DEFAULT_TIMEOUT);
                 success = future.await(timeout);
             }
+            // 若发生异常，抛出
             Throwable cause = future.cause();
             if (cause != null) {
                 throw cause;
@@ -120,20 +145,24 @@ final class NettyChannel extends AbstractChannel {
     @Override
     public void close() {
         try {
+            // 标记关闭
             super.close();
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
         }
+        // 移除连接
         try {
             removeChannelIfDisconnected(channel);
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
         }
+        // 清空属性 attributes
         try {
             attributes.clear();
         } catch (Exception e) {
             logger.warn(e.getMessage(), e);
         }
+        // 关闭真正的通道 channel
         try {
             if (logger.isInfoEnabled()) {
                 logger.info("Close netty channel " + channel);

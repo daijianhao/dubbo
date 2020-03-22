@@ -25,6 +25,8 @@ import java.io.IOException;
 
 /**
  * 编解码器接口
+ *
+ * 相较于Codec,将编解码传入的stream改为了buffer
  */
 @SPI
 public interface Codec2 {

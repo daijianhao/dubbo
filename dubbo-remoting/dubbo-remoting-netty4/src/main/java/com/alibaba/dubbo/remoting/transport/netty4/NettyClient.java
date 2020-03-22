@@ -49,6 +49,9 @@ public class NettyClient extends AbstractClient {
 
     private Bootstrap bootstrap;
 
+    /**
+     * 通道，有 volatile 修饰符。因为客户端可能会断开重连，需要保证多线程的可见性。
+     */
     private volatile Channel channel; // volatile, please copy reference to use
 
     public NettyClient(final URL url, final ChannelHandler handler) throws RemotingException {
@@ -57,13 +60,17 @@ public class NettyClient extends AbstractClient {
 
     @Override
     protected void doOpen() throws Throwable {
+        // 创建 NettyClientHandler 对象
         final NettyClientHandler nettyClientHandler = new NettyClientHandler(getUrl(), this);
+        // 实例化 ServerBootstrap
         bootstrap = new Bootstrap();
+        // 设置它的线程组
         bootstrap.group(nioEventLoopGroup)
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .option(ChannelOption.TCP_NODELAY, true)
                 .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
                 //.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, getTimeout())
+                // 设置 Channel类型
                 .channel(NioSocketChannel.class);
 
         if (getConnectTimeout() < 3000) {
@@ -72,6 +79,7 @@ public class NettyClient extends AbstractClient {
             bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, getConnectTimeout());
         }
 
+        // 设置责任链路
         bootstrap.handler(new ChannelInitializer() {
 
             @Override
@@ -87,6 +95,7 @@ public class NettyClient extends AbstractClient {
 
     @Override
     protected void doConnect() throws Throwable {
+        // 连接服务器
         long start = System.currentTimeMillis();
         ChannelFuture future = bootstrap.connect(getConnectAddress());
         try {

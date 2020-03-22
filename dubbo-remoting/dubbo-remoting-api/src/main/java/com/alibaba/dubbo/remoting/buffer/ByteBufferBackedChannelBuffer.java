@@ -22,18 +22,28 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
+/**
+ * 实现 AbstractChannelBuffer 抽象类，基于 java.nio.ByteBuffer 的 Buffer 实现类。
+ */
 public class ByteBufferBackedChannelBuffer extends AbstractChannelBuffer {
 
+    /**
+     * 内置的ByteBuffer
+     */
     private final ByteBuffer buffer;
 
+    /**
+     * 容量
+     */
     private final int capacity;
 
     public ByteBufferBackedChannelBuffer(ByteBuffer buffer) {
         if (buffer == null) {
             throw new NullPointerException("buffer");
         }
-
+        //浅拷贝buffer
         this.buffer = buffer.slice();
+        //剩余容量
         capacity = buffer.remaining();
         writerIndex(capacity);
     }
@@ -47,8 +57,10 @@ public class ByteBufferBackedChannelBuffer extends AbstractChannelBuffer {
     @Override
     public ChannelBufferFactory factory() {
         if (buffer.isDirect()) {
+            //直接 内存工厂
             return DirectChannelBufferFactory.getInstance();
         } else {
+            //堆内存工厂
             return HeapChannelBufferFactory.getInstance();
         }
     }

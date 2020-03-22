@@ -17,9 +17,15 @@
 
 package com.alibaba.dubbo.remoting.buffer;
 
+import com.alibaba.dubbo.common.serialize.Serialization;
+
 import java.io.IOException;
 import java.io.OutputStream;
 
+/**
+ * 将ChannelBuffer包装为outputStream
+ * 在反序列化时用{@link Serialization}
+ */
 public class ChannelBufferOutputStream extends OutputStream {
 
     private final ChannelBuffer buffer;
