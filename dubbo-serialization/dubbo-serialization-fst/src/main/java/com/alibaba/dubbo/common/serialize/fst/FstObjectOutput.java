@@ -24,6 +24,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 
+/**
+ * 实现 Serialization 接口，FST 序列化实现类
+ */
 public class FstObjectOutput implements ObjectOutput {
 
     private FSTObjectOutput output;

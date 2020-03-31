@@ -20,11 +20,14 @@ import java.io.IOException;
 
 /**
  * Object output.
+ * <p>
+ * 实现 DataOutput 接口，对象输出接口
  */
 public interface ObjectOutput extends DataOutput {
 
     /**
      * write object.
+     * 在 DataOutput 的基础上，增加写入对象的数据。
      *
      * @param obj object.
      */

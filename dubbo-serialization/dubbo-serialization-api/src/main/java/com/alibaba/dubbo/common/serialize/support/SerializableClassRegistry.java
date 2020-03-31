@@ -21,6 +21,9 @@ import com.esotericsoftware.kryo.Serializer;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 序列化优化类的注册表
+ */
 public abstract class SerializableClassRegistry {
 
     private static final Map<Class, Object> registrations = new LinkedHashMap<Class, Object>();
@@ -42,6 +45,10 @@ public abstract class SerializableClassRegistry {
         registrations.put(clazz, serializer);
     }
 
+    /**
+     * 静态方法，获得。在 Kryo 、FST 中，调用该方法，获得需要使用优化的类的集合。
+     * @return
+     */
     public static Map<Class, Object> getRegisteredClasses() {
         return registrations;
     }

@@ -25,10 +25,19 @@ import org.nustaq.serialization.FSTObjectOutput;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+/**
+ * FST fast-serialization 是重新实现的 Java 快速对象序列化的开发包。序列化速度更快（2-10倍）、体积更小，
+ * 而且兼容 JDK 原生的序列化。要求 JDK 1.7 支持。
+ */
 public class FstFactory {
-
+    /**
+     * 单例
+     */
     private static final FstFactory factory = new FstFactory();
-
+    /**
+     * 配置对象
+     * FST 配置对象。在构造方法中，将 SerializableClassRegistry 注册表需要使用优化的类，注册到 FSTConfiguration 中
+     */
     private final FSTConfiguration conf = FSTConfiguration.createDefaultConfiguration();
 
 
@@ -37,6 +46,7 @@ public class FstFactory {
     }
 
     public FstFactory() {
+        // 注册
         for (Class clazz : SerializableClassRegistry.getRegisteredClasses().keySet()) {
             conf.registerClass(clazz);
         }
