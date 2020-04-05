@@ -24,6 +24,9 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.serializers.JavaSerializer;
 
+/**
+ * 实现 Kryo 类，兼容空构造方法的 Kryo 实现类
+ */
 public class CompatibleKryo extends Kryo {
 
     private static final Logger logger = LoggerFactory.getLogger(CompatibleKryo.class);
@@ -43,6 +46,7 @@ public class CompatibleKryo extends Kryo {
          * default to the default serializer.
          * It is the responsibility of kryo to handle with every standard jdk classes, so we will just escape these classes.
          */
+        // 空构造方法时，使用 JavaSerializer ，Java 原生序列化实现
         if (!ReflectionUtils.isJdk(type) && !type.isArray() && !type.isEnum() && !ReflectionUtils.checkZeroArgConstructor(type)) {
             if (logger.isWarnEnabled()) {
                 logger.warn(type + " has no zero-arg constructor and this will affect the serialization performance");

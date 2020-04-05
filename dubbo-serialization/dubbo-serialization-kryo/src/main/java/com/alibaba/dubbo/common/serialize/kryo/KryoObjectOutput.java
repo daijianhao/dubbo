@@ -26,9 +26,19 @@ import com.esotericsoftware.kryo.io.Output;
 import java.io.IOException;
 import java.io.OutputStream;
 
+/**
+ * 实现 ObjectOutput, Cleanable 接口，Kryo 对象输出实现类。
+ */
 public class KryoObjectOutput implements ObjectOutput, Cleanable {
 
+    /**
+     * Kryo 对象
+     */
     private Output output;
+
+    /**
+     * Kryo 输出
+     */
     private Kryo kryo;
 
     public KryoObjectOutput(OutputStream outputStream) {
@@ -36,6 +46,11 @@ public class KryoObjectOutput implements ObjectOutput, Cleanable {
         this.kryo = KryoUtils.get();
     }
 
+    /**
+     * 来自 DataOutput 的实现方法，调用 input 对应的方法
+     * @param v value.
+     * @throws IOException
+     */
     @Override
     public void writeBool(boolean v) throws IOException {
         output.writeBoolean(v);
@@ -109,6 +124,7 @@ public class KryoObjectOutput implements ObjectOutput, Cleanable {
 
     @Override
     public void cleanup() {
+        // 释放 Kryo 对象
         KryoUtils.release(kryo);
         kryo = null;
     }

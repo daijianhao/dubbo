@@ -28,19 +28,30 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Type;
 
+/**
+ * 实现 ObjectInput, Cleanable 接口，Kryo 对象输入实现类。
+ */
 public class KryoObjectInput implements ObjectInput, Cleanable {
 
+    /**
+     * Kryo 对象,通过 KryoUtils#get() 方法，获取。
+     */
     private Kryo kryo;
+    /**
+     * Kryo 输入
+     */
     private Input input;
 
     public KryoObjectInput(InputStream inputStream) {
         input = new Input(inputStream);
+        //因为kryo对象不是线程安全的，所以使用ThreadLocal
         this.kryo = KryoUtils.get();
     }
 
     @Override
     public boolean readBool() throws IOException {
         try {
+            //调用对应的方法
             return input.readBoolean();
         } catch (KryoException e) {
             throw new IOException(e);
@@ -153,7 +164,9 @@ public class KryoObjectInput implements ObjectInput, Cleanable {
 
     @Override
     public void cleanup() {
+        // 释放 Kryo 对象
         KryoUtils.release(kryo);
+        // 清空
         kryo = null;
     }
 }
