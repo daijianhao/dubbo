@@ -31,28 +31,43 @@ import org.slf4j.LoggerFactory;
 
 /**
  * LogbackContainer. (SPI, Singleton, ThreadSafe)
+ *
+ * 实现 Container 接口，Logback 容器实现类，自动配置 logback 的配置，自动适配 logback 的配置。属于 dubbo-container-logback 项目。
  */
 public class LogbackContainer implements Container {
 
+    /**
+     * 日志文件路径配置 KEY
+     */
     public static final String LOGBACK_FILE = "dubbo.logback.file";
 
+    /**
+     * 日志级别配置 KEY
+     */
     public static final String LOGBACK_LEVEL = "dubbo.logback.level";
 
+    /**
+     * 日志保留天数配置 KEY
+     */
     public static final String LOGBACK_MAX_HISTORY = "dubbo.logback.maxhistory";
-
+    /**
+     * 默认日志级别 - ERROR
+     */
     public static final String DEFAULT_LOGBACK_LEVEL = "ERROR";
 
     @Override
     public void start() {
+        // 获得 logback 配置的日志文件路径
         String file = ConfigUtils.getProperty(LOGBACK_FILE);
         if (file != null && file.length() > 0) {
             String level = ConfigUtils.getProperty(LOGBACK_LEVEL);
             if (level == null || level.length() == 0) {
                 level = DEFAULT_LOGBACK_LEVEL;
             }
+            // 获得日志保留天数。若为零，则无限天数
             // maxHistory=0 Infinite history
             int maxHistory = StringUtils.parseInteger(ConfigUtils.getProperty(LOGBACK_MAX_HISTORY));
-
+            // 初始化 logback
             doInitializer(file, level, maxHistory);
         }
     }

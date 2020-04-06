@@ -29,26 +29,44 @@ import java.util.Properties;
 
 /**
  * Log4jContainer. (SPI, Singleton, ThreadSafe)
+ * <p>
+ * 实现 Container 接口，Log4j 容器实现类，自动配置 log4j 的配置，
+ * 在多进程启动时，自动给日志文件按进程分目录。属于 dubbo-container-log4j 项目。
  */
 public class Log4jContainer implements Container {
 
+    /**
+     * 日志文件路径配置 KEY
+     */
     public static final String LOG4J_FILE = "dubbo.log4j.file";
 
+    /**
+     * 日志级别配置 KEY
+     */
     public static final String LOG4J_LEVEL = "dubbo.log4j.level";
 
+    /**
+     * 日志子目录径配置 KEY
+     */
     public static final String LOG4J_SUBDIRECTORY = "dubbo.log4j.subdirectory";
 
+    /**
+     * 默认日志级别 - ERROR
+     */
     public static final String DEFAULT_LOG4J_LEVEL = "ERROR";
 
     @Override
     @SuppressWarnings("unchecked")
     public void start() {
+        // 获得 log4j 配置的日志文件路径
         String file = ConfigUtils.getProperty(LOG4J_FILE);
         if (file != null && file.length() > 0) {
+            // 获得日志级别
             String level = ConfigUtils.getProperty(LOG4J_LEVEL);
             if (level == null || level.length() == 0) {
                 level = DEFAULT_LOG4J_LEVEL;
             }
+            // 创建日志 Properties 对象，并设置到 PropertyConfigurator 中。
             Properties properties = new Properties();
             properties.setProperty("log4j.rootLogger", level + ",application");
             properties.setProperty("log4j.appender.application", "org.apache.log4j.DailyRollingFileAppender");
@@ -59,12 +77,15 @@ public class Log4jContainer implements Container {
             properties.setProperty("log4j.appender.application.layout.ConversionPattern", "%d [%t] %-5p %C{6} (%F:%L) - %m%n");
             PropertyConfigurator.configure(properties);
         }
+        // 获得日志子目录，用于多进程启动，避免冲突。
         String subdirectory = ConfigUtils.getProperty(LOG4J_SUBDIRECTORY);
         if (subdirectory != null && subdirectory.length() > 0) {
+            // 循环每个 Logger 对象
             Enumeration<org.apache.log4j.Logger> ls = LogManager.getCurrentLoggers();
             while (ls.hasMoreElements()) {
                 org.apache.log4j.Logger l = ls.nextElement();
                 if (l != null) {
+                    // 循环每个 Logger 对象的 Appender 对象
                     Enumeration<Appender> as = l.getAllAppenders();
                     while (as.hasMoreElements()) {
                         Appender a = as.nextElement();
