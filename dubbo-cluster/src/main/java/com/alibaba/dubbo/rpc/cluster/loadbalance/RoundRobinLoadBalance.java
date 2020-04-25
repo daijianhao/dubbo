@@ -33,7 +33,11 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Round robin load balance.
  * 
- * Smoothly round robin's implementation @since 2.6.5 
+ * Smoothly round robin's implementation @since 2.6.5
+ *
+ * 实现 AbstractLoadBalance 抽象类，轮循，按公约后的权重设置轮循比率。
+ *
+ * 存在慢的提供者累积请求的问题，比如：第二台机器很慢，但没挂，当请求调到第二台时就卡在那，久而久之，所有请求都卡在调到第二台上
  */
 public class RoundRobinLoadBalance extends AbstractLoadBalance {
     public static final String NAME = "roundrobin";
@@ -65,6 +69,11 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
         }
     }
 
+    /**
+     * 服务方法与计数器的映射
+     *
+     * KEY：serviceKey + "." + methodName
+     */
     private ConcurrentMap<String, ConcurrentMap<String, WeightedRoundRobin>> methodWeightMap = new ConcurrentHashMap<String, ConcurrentMap<String, WeightedRoundRobin>>();
     private AtomicBoolean updateLock = new AtomicBoolean();
     
@@ -94,6 +103,7 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
             methodWeightMap.putIfAbsent(key, new ConcurrentHashMap<String, WeightedRoundRobin>());
             map = methodWeightMap.get(key);
         }
+        // 计算最小、最大权重，总的权重和。
         int totalWeight = 0;
         long maxCurrent = Long.MIN_VALUE;
         long now = System.currentTimeMillis();
@@ -116,9 +126,11 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
                 //weight changed
                 weightedRoundRobin.setWeight(weight);
             }
+            //增加当前invoker的权重
             long cur = weightedRoundRobin.increaseCurrent();
+            //设置最新更新时间
             weightedRoundRobin.setLastUpdate(now);
-            if (cur > maxCurrent) {
+            if (cur > maxCurrent) {//如果当前权重大于上一次的权重
                 maxCurrent = cur;
                 selectedInvoker = invoker;
                 selectedWRR = weightedRoundRobin;

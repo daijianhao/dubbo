@@ -25,7 +25,9 @@ import java.util.Random;
 
 /**
  * random load balance.
+ *实现 AbstractLoadBalance 抽象类，随机，按权重设置随机概率。
  *
+ * 在一个截面上碰撞的概率高，但调用量越大分布越均匀，而且按概率使用权重后也比较均匀，有利于动态调整提供者权重。
  */
 public class RandomLoadBalance extends AbstractLoadBalance {
 
@@ -38,7 +40,9 @@ public class RandomLoadBalance extends AbstractLoadBalance {
         int length = invokers.size(); // Number of invokers
         int totalWeight = 0; // The sum of weights
         boolean sameWeight = true; // Every invoker has the same weight?
+        // 计算总权限
         for (int i = 0; i < length; i++) {
+            // 获得权重
             int weight = getWeight(invokers.get(i), invocation);
             totalWeight += weight; // Sum
             if (sameWeight && i > 0
@@ -46,10 +50,13 @@ public class RandomLoadBalance extends AbstractLoadBalance {
                 sameWeight = false;
             }
         }
+        // 权重不相等，随机后，判断在哪个 Invoker 的权重区间中
         if (totalWeight > 0 && !sameWeight) {
             // If (not every invoker has the same weight & at least one invoker's weight>0), select randomly based on totalWeight.
+            // 随机
             int offset = random.nextInt(totalWeight);
             // Return a invoker based on the random value.
+            // 区间判断
             for (int i = 0; i < length; i++) {
                 offset -= getWeight(invokers.get(i), invocation);
                 if (offset < 0) {
@@ -57,6 +64,7 @@ public class RandomLoadBalance extends AbstractLoadBalance {
                 }
             }
         }
+        // 权重相等，平均随机
         // If all invokers have the same weight value or totalWeight=0, return evenly.
         return invokers.get(random.nextInt(length));
     }
