@@ -21,12 +21,18 @@ import com.alibaba.dubbo.rpc.RpcException;
 import com.alibaba.dubbo.rpc.cluster.Cluster;
 import com.alibaba.dubbo.rpc.cluster.Directory;
 
+/**
+ * 实现 Cluster 接口，分组聚合 Cluster 实现类
+ *
+ * Merger 的使用，需要设置 Cluster 的实现类为 MergeableCluster 。但是呢，它的配置方式，和其他 Cluster 实现类不同。
+ */
 public class MergeableCluster implements Cluster {
 
     public static final String NAME = "mergeable";
 
     @Override
     public <T> Invoker<T> join(Directory<T> directory) throws RpcException {
+        //对应 Invoker 实现类为 MergeableClusterInvoker
         return new MergeableClusterInvoker<T>(directory);
     }
 
