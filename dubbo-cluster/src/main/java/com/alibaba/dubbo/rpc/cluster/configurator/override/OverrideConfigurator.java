@@ -22,6 +22,7 @@ import com.alibaba.dubbo.rpc.cluster.configurator.AbstractConfigurator;
 /**
  * AbsentConfigurator
  *
+ * 实现 AbstractConfigurator 抽象类，override Configurator 实现类
  */
 public class OverrideConfigurator extends AbstractConfigurator {
 
@@ -31,6 +32,7 @@ public class OverrideConfigurator extends AbstractConfigurator {
 
     @Override
     public URL doConfigure(URL currentUrl, URL configUrl) {
+        //覆盖添加
         return currentUrl.addParameters(configUrl.getParameters());
     }
 

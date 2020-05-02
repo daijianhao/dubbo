@@ -21,7 +21,7 @@ import com.alibaba.dubbo.rpc.cluster.configurator.AbstractConfigurator;
 
 /**
  * AbsentConfigurator
- *
+ *实现 AbstractConfigurator 抽象类，absent Configurator 实现类
  */
 public class AbsentConfigurator extends AbstractConfigurator {
 
@@ -31,6 +31,7 @@ public class AbsentConfigurator extends AbstractConfigurator {
 
     @Override
     public URL doConfigure(URL currentUrl, URL configUrl) {
+        // 不存在时添加
         return currentUrl.addParametersIfAbsent(configUrl.getParameters());
     }
 

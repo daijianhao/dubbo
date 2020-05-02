@@ -23,6 +23,7 @@ import com.alibaba.dubbo.rpc.cluster.ConfiguratorFactory;
 /**
  * AbsentConfiguratorFactory
  *
+ * 实现 ConfiguratorFactory 接口，AbsentConfigurator 工厂
  */
 public class AbsentConfiguratorFactory implements ConfiguratorFactory {
 
