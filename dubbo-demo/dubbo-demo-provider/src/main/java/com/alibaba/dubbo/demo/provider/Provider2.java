@@ -14,37 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.alibaba.dubbo.demo.consumer;
+package com.alibaba.dubbo.demo.provider;
 
-import com.alibaba.dubbo.demo.Demo2Service;
-import com.alibaba.dubbo.demo.Demo3Service;
-import com.alibaba.dubbo.demo.DemoService;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 
-public class Consumer {
+public class Provider2 {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         //Prevent to get IPV6 address,this way only work in debug mode
         //But you can pass use -Djava.net.preferIPv4Stack=true,then it work well whether in debug mode or not
         System.setProperty("java.net.preferIPv4Stack", "true");
-        ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext(new String[]{"META-INF/spring/dubbo-demo-consumer.xml"});
+        ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext(new String[]{"META-INF/spring/dubbo-demo-provider2.xml"});
         context.start();
-        DemoService demoService = (DemoService) context.getBean("demoService"); // get remote service proxy
-        Demo2Service demo2Service = (Demo2Service) context.getBean("demo2Service"); // get remote service proxy
 
-        while (true) {
-            try {
-                Thread.sleep(1000);
-                String hello = demoService.sayHello("world"); // call remote method
-                System.out.println(hello); // get result
-
-                String tom = demo2Service.sayHi("tom");
-                System.out.println(tom);
-
-            } catch (Throwable throwable) {
-                throwable.printStackTrace();
-            }
-        }
-
+        System.in.read(); // press any key to exit
     }
+
 }

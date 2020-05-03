@@ -26,7 +26,7 @@ import java.util.List;
 
 /**
  * StaticDirectory
- *
+ *实现 AbstractDirectory 抽象类，静态 Directory 实现类。逻辑比较简单，将传入的 invokers 集合，封装成静态的 Directory 对象
  */
 public class StaticDirectory<T> extends AbstractDirectory<T> {
 

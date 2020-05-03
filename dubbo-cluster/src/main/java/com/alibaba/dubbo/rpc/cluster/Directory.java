@@ -29,11 +29,17 @@ import java.util.List;
  * <a href="http://en.wikipedia.org/wiki/Directory_service">Directory Service</a>
  *
  * @see com.alibaba.dubbo.rpc.cluster.Cluster#join(Directory)
+ * <p>
+ * 中文直译为目录，代表了多个 Invoker ，可以把它看成 List<Invoker> 。但与 List 不同的是，它的值可能是动态变化的，比如注册中心推送变更。
+ *
+ * 一个 Directory 只对应一个服务类型。
  */
 public interface Directory<T> extends Node {
 
     /**
      * get service type.
+     *
+     * 获得服务类型，例如：com.alibaba.dubbo.demo.DemoService
      *
      * @return service type.
      */
@@ -41,6 +47,8 @@ public interface Directory<T> extends Node {
 
     /**
      * list invokers.
+     *
+     * 获得所有服务 Invoker 集合
      *
      * @return invokers
      */

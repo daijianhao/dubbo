@@ -23,10 +23,15 @@ import com.alibaba.dubbo.rpc.cluster.Directory;
 
 /**
  * mock impl
- *
+ *实现 Cluster 接口，Mock Cluster Wrapper 实现类
  */
 public class MockClusterWrapper implements Cluster {
 
+    /**
+     * 真正的 Cluster 对象
+     *
+     * 因为 MockClusterWrapper 是 Dubbo SPI Wrapper 类，所以对应的 Cluster 对象，都会被它所包装
+     */
     private Cluster cluster;
 
     public MockClusterWrapper(Cluster cluster) {

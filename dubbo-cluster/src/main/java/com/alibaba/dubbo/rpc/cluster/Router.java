@@ -28,6 +28,17 @@ import java.util.List;
  * <p>
  * <a href="http://en.wikipedia.org/wiki/Routing">Routing</a>
  *
+ * 实现 Comparable 接口，路由规则接口
+ *
+ * 路由规则  即 可以控制某个消费端 或 某个消费端的某个方法 只调用指定的 服务端等
+ *
+ *
+ * 一个 Router 对象，对应一条路由规则。
+ * Configurator 有优先级的要求，所以实现 Comparable 接口。
+ * #getUrl() 接口方法，获得路由 URL ，里面带有路由规则。
+ * #route(List<Invoker<T>> invokers, URL url, Invocation invocation) 接口方法，路由，筛选匹配的 Invoker 集合。
+ *
+ * http://dubbo.apache.org/zh-cn/docs/user/demos/routing-rule.html
  * @see com.alibaba.dubbo.rpc.cluster.Cluster#join(Directory)
  * @see com.alibaba.dubbo.rpc.cluster.Directory#list(Invocation)
  */
@@ -35,7 +46,7 @@ public interface Router extends Comparable<Router>{
 
     /**
      * get the router url.
-     *
+     * 路由规则 URL
      * @return url
      */
     URL getUrl();
@@ -43,6 +54,7 @@ public interface Router extends Comparable<Router>{
     /**
      * route.
      *
+     * 路由，筛选匹配的 Invoker 集合
      * @param invokers
      * @param url        refer url
      * @param invocation

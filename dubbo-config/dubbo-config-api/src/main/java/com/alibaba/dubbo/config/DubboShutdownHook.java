@@ -29,6 +29,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * This is a singleton in order to ensure there is only one shutdown hook registered.
  * Because {@link ApplicationShutdownHooks} use {@link java.util.IdentityHashMap}
  * to store the shutdown hooks.
+ *
+ * Dubbo优雅停机
  */
 public class DubboShutdownHook extends Thread {
 
@@ -62,12 +64,22 @@ public class DubboShutdownHook extends Thread {
      * Destroy all the resources, including registries and protocols.
      */
     public void destroyAll() {
+        // 忽略，若已经销毁
         if (!destroyed.compareAndSet(false, true)) {
             return;
         }
         // destroy all the registries
+        // 销毁 Registry 相关
         AbstractRegistryFactory.destroyAll();
         // destroy all the protocols
+        // 销毁 Protocol 相关
+        /**
+         * 销毁所有 Protocol 。目前分层两类 Protocol ：
+         *
+         * 和 Registry 集成的 Protocol 实现类 RegistryProtocol ，关注服务的注册。具体的销毁逻辑，见 「2.3 RegistryProtocol」 中。
+         * 具体协议对应的 Protocol 实现类，例如 dubbo:// 对应的 DubboProtocol 、hessian:// 对应的 HessianProtocol ，
+         * 关注服务的暴露和引用。因为 DubboProtocol 是最常用的，所以我们以它为例子，在 「2.2 DubboProtocol」 中分享。
+         */
         ExtensionLoader<Protocol> loader = ExtensionLoader.getExtensionLoader(Protocol.class);
         for (String protocolName : loader.getLoadedExtensions()) {
             try {

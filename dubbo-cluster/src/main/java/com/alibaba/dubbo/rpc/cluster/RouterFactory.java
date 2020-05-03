@@ -25,6 +25,10 @@ import com.alibaba.dubbo.common.extension.SPI;
  * <p>
  * <a href="http://en.wikipedia.org/wiki/Routing">Routing</a>
  *
+ * 路由工程接口
+ *
+ * Router 工厂接口
+ *
  * @see Cluster#join(Directory)
  * @see Directory#list(com.alibaba.dubbo.rpc.Invocation)
  */
@@ -33,7 +37,7 @@ public interface RouterFactory {
 
     /**
      * Create router.
-     *
+     * 创建 Router 对象
      * @param url
      * @return router
      */

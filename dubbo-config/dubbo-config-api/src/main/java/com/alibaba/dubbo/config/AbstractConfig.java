@@ -115,6 +115,7 @@ public abstract class AbstractConfig implements Serializable {
         legacyProperties.put("dubbo.service.url", "dubbo.service.address");
 
         // this is only for compatibility 考虑兼容性
+        //Dubbo 的优雅停机 ShutdownHook 在 AbstractConfig 的静态代码块初始化
         Runtime.getRuntime().addShutdownHook(DubboShutdownHook.getDubboShutdownHook());
     }
 

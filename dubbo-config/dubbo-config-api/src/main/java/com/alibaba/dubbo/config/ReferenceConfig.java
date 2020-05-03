@@ -457,6 +457,10 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 List<Invoker<?>> invokers = new ArrayList<Invoker<?>>();
                 URL registryURL = null;
                 for (URL url : urls) {
+                    //todo 这里的 refprotocol 是一个自适应对象，可以根据url参数来决定具体的实现类
+                    //todo  1.refprotocol:先是调用RegistryProtocol.refer()
+                    //todo  2.在RegistryProtocol.refer()中会调用Cluster.join(Directory dir),Directory中包含了经过包装(主要是过滤器和监听器)的 DubboInvoker
+
                     invokers.add(refprotocol.refer(interfaceClass, url));
                     if (Constants.REGISTRY_PROTOCOL.equals(url.getProtocol())) {
                         // 使用最后一个注册中心的 URL
@@ -464,10 +468,26 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                     }
                 }
                 // 有注册中心
+                /**
+                 * 当 registryURL 非空时，意味着有注册中心，使用 cluster=available 集群方式，并调用 Cluster$Adaptive#join(StaticDirectory) 方法，创建对应的 Cluster Invoker 对象。
+                 * 这意味着，服务调用时，因为使用的是 cluster=available ，仅调用第一个可用的 Invoker 对象。下面，我们来做一个 YY ：
+                 *
+                 * 目前我们有 A , B 两个机房，分别对应 zk01 集群，zk02 集群。这两个 zk 集群不互通 。
+                 * A , B 机房，分别部署了 User 服务提供者，仅注册到自己机房的 zk 集群。
+                 * A , B 机房，部署了对应的 User 服务消费，那么如果我们希望优先调用本机房。当本机房 User 服务提供者全挂的情况下，使用另外一个机房，该如何配置呢？
+                 *
+                 * // A 机房
+                 * <dubbo:reference interface="com.alibaba.dubbo.demo.UserService" registry="zk01,zk02" />
+                 * // B 机房
+                 * <dubbo:reference interface="com.alibaba.dubbo.demo.UserService" registry="zk02,zk01" />
+                 * 即在 "registry" 配置项中，将自己的 zk 集群放在前面。
+                 * 当然，大多数情况下，很少会出现一个机房服务提供者全挂，zk 集群还存活着
+                 */
                 if (registryURL != null) { // registry url is available
                     // 对有注册中心的 Cluster 只用 AvailableCluster
                     // use AvailableCluster only when register's cluster is available
                     URL u = registryURL.addParameterIfAbsent(Constants.CLUSTER_KEY, AvailableCluster.NAME);
+                    //todo  此处将多个注册中心的 invoker 合并为一个
                     invoker = cluster.join(new StaticDirectory(u, invokers));
                 } else { // not a registry url
                     // 无注册中心

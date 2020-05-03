@@ -20,12 +20,20 @@ import com.alibaba.dubbo.common.URL;
 
 /**
  * Configurator. (SPI, Prototype, ThreadSafe)
+ * <p>
+ * 实现 Comparable 接口，配置规则接口
  *
+ * 一个 Configurator 对象，对应一条配置规则。
+ * Configurator 有优先级的要求，所以实现 Comparable 接口。
+ * #getUrl() 接口方法，获得配置 URL ，里面带有配置规则。
+ * #configure(Url url) 接口方法，设置配置规则到指定 URL 中。
  */
 public interface Configurator extends Comparable<Configurator> {
 
     /**
      * get the configurator url.
+     * <p>
+     * 配置规则
      *
      * @return configurator url.
      */
@@ -34,6 +42,7 @@ public interface Configurator extends Comparable<Configurator> {
     /**
      * Configure the provider url.
      * O
+     * 配置到 URL 中
      *
      * @param url - old rovider url.
      * @return new provider url.

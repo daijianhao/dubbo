@@ -332,9 +332,10 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         }
 
         String normalizedMock = MockInvoker.normalizeMock(mock);
-        if (normalizedMock.startsWith(Constants.RETURN_PREFIX)) {
+        if (normalizedMock.startsWith(Constants.RETURN_PREFIX)) { // 处理 "return " 开头的情况
             normalizedMock = normalizedMock.substring(Constants.RETURN_PREFIX.length()).trim();
             try {
+                // 校验 Mock 值，配置正确
                 MockInvoker.parseMockValue(normalizedMock);
             } catch (Exception e) {
                 throw new IllegalStateException("Illegal mock return in <dubbo:service/reference ... " +
@@ -351,6 +352,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
                 }
             }
         } else {
+            // 获得 Mock 类
             MockInvoker.getMockObject(normalizedMock, interfaceClass);
         }
     }
