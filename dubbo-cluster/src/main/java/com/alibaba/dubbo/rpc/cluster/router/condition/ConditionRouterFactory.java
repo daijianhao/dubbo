@@ -22,12 +22,17 @@ import com.alibaba.dubbo.rpc.cluster.RouterFactory;
 
 /**
  * ConditionRouterFactory
- *
+ * 实现 RouterFactory 接口，ConditionRouter 工厂实现类
  */
 public class ConditionRouterFactory implements RouterFactory {
 
     public static final String NAME = "condition";
 
+    /**
+     * 对应 Router 实现类为 ConditionRouter
+     * @param url
+     * @return
+     */
     @Override
     public Router getRouter(URL url) {
         return new ConditionRouter(url);

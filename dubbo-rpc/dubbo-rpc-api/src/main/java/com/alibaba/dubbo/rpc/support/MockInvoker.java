@@ -38,11 +38,34 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 实现 Invoker 接口，Mock Invoker 实现类
+ * @param <T>
+ */
 final public class MockInvoker<T> implements Invoker<T> {
+
+    /**
+     * ProxyFactory$Adaptive 对象
+     */
     private final static ProxyFactory proxyFactory = ExtensionLoader.getExtensionLoader(ProxyFactory.class).getAdaptiveExtension();
+
+    /**
+     * mock 与 Invoker 对象的映射缓存
+     *
+     * @see #getInvoker(String)
+     */
     private final static Map<String, Invoker<?>> mocks = new ConcurrentHashMap<String, Invoker<?>>();
+
+    /**
+     * mock 与 Throwable 对象的映射缓存
+     *
+     * @see #getThrowable(String)
+     */
     private final static Map<String, Throwable> throwables = new ConcurrentHashMap<String, Throwable>();
 
+    /**
+     * URL 对象
+     */
     private final URL url;
 
     public MockInvoker(URL url) {
@@ -85,6 +108,7 @@ final public class MockInvoker<T> implements Invoker<T> {
 
     @Override
     public Result invoke(Invocation invocation) throws RpcException {
+        // 获得 `"mock"` 配置项，方法级 > 类级
         String mock = getUrl().getParameter(invocation.getMethodName() + "." + Constants.MOCK_KEY);
         if (invocation instanceof RpcInvocation) {
             ((RpcInvocation) invocation).setInvoker(this);
@@ -94,30 +118,39 @@ final public class MockInvoker<T> implements Invoker<T> {
         }
 
         if (StringUtils.isBlank(mock)) {
+            // 不允许为空
             throw new RpcException(new IllegalAccessException("mock can not be null. url :" + url));
         }
+        // 标准化 `"mock"` 配置项
         mock = normalizeMock(URL.decode(mock));
+        // 等于 "return " ，返回值为空的 RpcResult 对象
         if (mock.startsWith(Constants.RETURN_PREFIX)) {
             mock = mock.substring(Constants.RETURN_PREFIX.length()).trim();
             try {
                 Type[] returnTypes = RpcUtils.getReturnTypes(invocation);
+                //解析mock返回值
                 Object value = parseMockValue(mock, returnTypes);
                 return new RpcResult(value);
             } catch (Exception ew) {
                 throw new RpcException("mock return invoke error. method :" + invocation.getMethodName()
                         + ", mock:" + mock + ", url: " + url, ew);
             }
-        } else if (mock.startsWith(Constants.THROW_PREFIX)) {
+        } else if (mock.startsWith(Constants.THROW_PREFIX)) { // 以 "throw" 开头，抛出 RpcException 异常
             mock = mock.substring(Constants.THROW_PREFIX.length()).trim();
             if (StringUtils.isBlank(mock)) {
+                // 禁止为空
                 throw new RpcException("mocked exception for service degradation.");
             } else { // user customized class
+                // 创建自定义异常
                 Throwable t = getThrowable(mock);
+                // 抛出业务类型的 RpcException 异常
                 throw new RpcException(RpcException.BIZ_EXCEPTION, t);
             }
         } else { //impl mock
             try {
+                // 创建 Invoker 对象
                 Invoker<T> invoker = getInvoker(mock);
+                // 执行 Invoker 对象的调用逻辑
                 return invoker.invoke(invocation);
             } catch (Throwable t) {
                 throw new RpcException("Failed to create mock implementation class " + mock, t);
@@ -148,14 +181,18 @@ final public class MockInvoker<T> implements Invoker<T> {
 
     @SuppressWarnings("unchecked")
     private Invoker<T> getInvoker(String mockService) {
+        // 从缓存中，获得 Invoker 对象
         Invoker<T> invoker = (Invoker<T>) mocks.get(mockService);
         if (invoker != null) {
             return invoker;
         }
-
+        // 不存在，创建 Invoker 对象
+        // 1. 获得接口类
         Class<T> serviceType = (Class<T>) ReflectUtils.forName(url.getServiceInterface());
         T mockObject = (T) getMockObject(mockService, serviceType);
+        // 6. 创建 Mock 对应，对应的 Invoker 对象
         invoker = proxyFactory.getInvoker(mockObject, serviceType, url);
+        // 7. 添加到缓存
         if (mocks.size() < 10000) {
             mocks.put(mockService, invoker);
         }
@@ -164,17 +201,20 @@ final public class MockInvoker<T> implements Invoker<T> {
 
     @SuppressWarnings("unchecked")
     public static Object getMockObject(String mockService, Class serviceType) {
+        // 2. 若为 `true` `default` ，修改修改为对应接口 + "Mock" 类。这种情况出现在原始 `mock = fail:true` 或 `mock = force:true` 等情况
         if (ConfigUtils.isDefault(mockService)) {
             mockService = serviceType.getName() + "Mock";
         }
-
+        // 3. 获得 Mock 类
         Class<?> mockClass = ReflectUtils.forName(mockService);
+        // 4. 校验 Mock 类，实现了接口类
         if (!serviceType.isAssignableFrom(mockClass)) {
             throw new IllegalStateException("The mock class " + mockClass.getName() +
                     " not implement interface " + serviceType.getName());
         }
 
         try {
+            // 5. 创建 Mock 对象
             return mockClass.newInstance();
         } catch (InstantiationException e) {
             throw new IllegalStateException("No default constructor from mock class " + mockClass.getName(), e);
@@ -199,6 +239,7 @@ final public class MockInvoker<T> implements Invoker<T> {
      * @return normalized mock string
      */
     public static String normalizeMock(String mock) {
+        // 若为空，直接返回
         if (mock == null) {
             return mock;
         }
@@ -213,14 +254,15 @@ final public class MockInvoker<T> implements Invoker<T> {
             return Constants.RETURN_PREFIX + "null";
         }
 
+        // 若果为 "true" "default" "fail" "force" 四种字符串，修改为对应接口 + "Mock" 类
         if (ConfigUtils.isDefault(mock) || "fail".equalsIgnoreCase(mock) || "force".equalsIgnoreCase(mock)) {
             return "default";
         }
-
+        // 若以 "fail:" 开头，去掉该开头
         if (mock.startsWith(Constants.FAIL_PREFIX)) {
             mock = mock.substring(Constants.FAIL_PREFIX.length()).trim();
         }
-
+        // 若以 "force:" 开头，去掉该开头
         if (mock.startsWith(Constants.FORCE_PREFIX)) {
             mock = mock.substring(Constants.FORCE_PREFIX.length()).trim();
         }

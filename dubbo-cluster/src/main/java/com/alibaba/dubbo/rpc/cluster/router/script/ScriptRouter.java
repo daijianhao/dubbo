@@ -40,6 +40,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * ScriptRouter
+ *
+ * 实现 Router 接口，基于脚本的 Router 实现类。
+ *
+ * 脚本路由规则 4 支持 JDK 脚本引擎的所有脚本，
+ * 比如：javascript, jruby, groovy 等，通过 type=javascript 参数设置脚本类型，缺省为 javascript。
  */
 public class ScriptRouter extends AbstractRouter {
 
@@ -47,10 +52,16 @@ public class ScriptRouter extends AbstractRouter {
 
     private static final int DEFAULT_PRIORITY = 1;
 
+    /**
+     * 脚本类型 与 ScriptEngine 的映射缓存
+     */
     private static final Map<String, ScriptEngine> engines = new ConcurrentHashMap<String, ScriptEngine>();
 
     private final ScriptEngine engine;
 
+    /**
+     * 路由规则内容
+     */
     private final String rule;
 
     public ScriptRouter(URL url) {
@@ -64,8 +75,10 @@ public class ScriptRouter extends AbstractRouter {
         if (rule == null || rule.length() == 0) {
             throw new IllegalStateException(new IllegalStateException("route rule can not be empty. rule:" + rule));
         }
+        // 初始化 `engine`
         ScriptEngine engine = engines.get(type);
         if (engine == null) {
+            // 在缓存中不存在，则进行创建 ScriptEngine 对象
             engine = new ScriptEngineManager().getEngineByName(type);
             if (engine == null) {
                 throw new IllegalStateException(new IllegalStateException("Unsupported route rule type: " + type + ", rule: " + rule));
@@ -76,18 +89,42 @@ public class ScriptRouter extends AbstractRouter {
         this.rule = rule;
     }
 
+    /**
+     *
+     * 基于脚本引擎的路由规则，如：
+     * > function route(invokers) {
+     * >     var result = new java.util.ArrayList(invokers.size());
+     * >     for (i = 0; i < invokers.size(); i ++) {
+     * >         if ("10.20.153.10".equals(invokers.get(i).getUrl().getHost())) {
+     * >             result.add(invokers.get(i));
+     * >         }
+     * >     }
+     * >     return result;
+     * > } (invokers); // 表示立即执行方法
+     * >
+     * @param invokers
+     * @param url        refer url
+     * @param invocation
+     * @param <T>
+     * @return
+     * @throws RpcException
+     */
     @Override
     @SuppressWarnings("unchecked")
     public <T> List<Invoker<T>> route(List<Invoker<T>> invokers, URL url, Invocation invocation) throws RpcException {
         try {
+            // 执行脚本
             List<Invoker<T>> invokersCopy = new ArrayList<Invoker<T>>(invokers);
             Compilable compilable = (Compilable) engine;
             Bindings bindings = engine.createBindings();
             bindings.put("invokers", invokersCopy);
             bindings.put("invocation", invocation);
             bindings.put("context", RpcContext.getContext());
+            // 编译
             CompiledScript function = compilable.compile(rule);
+            // 执行
             Object obj = function.eval(bindings);
+            // 根据结果类型，转换成 (List<Invoker<T>> 类型返回
             if (obj instanceof Invoker[]) {
                 invokersCopy = Arrays.asList((Invoker<T>[]) obj);
             } else if (obj instanceof Object[]) {
@@ -96,6 +133,7 @@ public class ScriptRouter extends AbstractRouter {
                     invokersCopy.add((Invoker<T>) inv);
                 }
             } else {
+                // 发生异常，忽略路由规则，返回全 `invokers` 集合
                 invokersCopy = (List<Invoker<T>>) obj;
             }
             return invokersCopy;

@@ -32,11 +32,17 @@ import com.alibaba.dubbo.rpc.cluster.RouterFactory;
  * </ol>
  * The host value in URL points out the address of the source content of the Script Router，Registry、File etc
  *
+ * 实现 RouterFactory 接口，ScriptRouter 工厂实现类
  */
 public class ScriptRouterFactory implements RouterFactory {
 
     public static final String NAME = "script";
 
+    /**
+     * 对应 Router 实现类为 ScriptRouter
+     * @param url
+     * @return
+     */
     @Override
     public Router getRouter(URL url) {
         return new ScriptRouter(url);
