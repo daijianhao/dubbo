@@ -30,11 +30,7 @@ import com.alibaba.dubbo.registry.Registry;
 import com.alibaba.dubbo.registry.RegistryFactory;
 import com.alibaba.dubbo.registry.RegistryService;
 import com.alibaba.dubbo.registry.support.ProviderConsumerRegTable;
-import com.alibaba.dubbo.rpc.Exporter;
-import com.alibaba.dubbo.rpc.Invoker;
-import com.alibaba.dubbo.rpc.Protocol;
-import com.alibaba.dubbo.rpc.ProxyFactory;
-import com.alibaba.dubbo.rpc.RpcException;
+import com.alibaba.dubbo.rpc.*;
 import com.alibaba.dubbo.rpc.cluster.Cluster;
 import com.alibaba.dubbo.rpc.cluster.Configurator;
 import com.alibaba.dubbo.rpc.protocol.InvokerWrapper;
@@ -47,17 +43,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import static com.alibaba.dubbo.common.Constants.ACCEPT_FOREIGN_IP;
-import static com.alibaba.dubbo.common.Constants.QOS_ENABLE;
-import static com.alibaba.dubbo.common.Constants.QOS_PORT;
-import static com.alibaba.dubbo.common.Constants.VALIDATION_KEY;
-import static com.alibaba.dubbo.common.Constants.CATEGORY_KEY;
-import static com.alibaba.dubbo.common.Constants.CONSUMERS_CATEGORY;
-import static com.alibaba.dubbo.common.Constants.CHECK_KEY;
+import static com.alibaba.dubbo.common.Constants.*;
 
 /**
  * RegistryProtocol
  * 实现 Protocol 接口，注册中心协议实现类
+ * <p>
+ * 在引用时，会将真实的invoker包装为ClusterInvoker 以此来实现集群容错等
  */
 public class RegistryProtocol implements Protocol {
 
@@ -178,6 +170,7 @@ public class RegistryProtocol implements Protocol {
         // 使用 OverrideListener 对象，订阅配置规则
         // FIXME When the provider subscribes, it will affect the scene : a certain JVM exposes the service and call the same service. Because the subscribed is cached key with the name of the service, it causes the subscription information to cover.
         final URL overrideSubscribeUrl = getSubscribedOverrideUrl(registeredProviderUrl);
+        //创建 OverrideListener 对象，并添加到 overrideListeners 中
         final OverrideListener overrideSubscribeListener = new OverrideListener(overrideSubscribeUrl, originInvoker);
         overrideListeners.put(overrideSubscribeUrl, overrideSubscribeListener);
         registry.subscribe(overrideSubscribeUrl, overrideSubscribeListener);
@@ -221,12 +214,23 @@ public class RegistryProtocol implements Protocol {
      */
     @SuppressWarnings("unchecked")
     private <T> void doChangeLocalExport(final Invoker<T> originInvoker, URL newInvokerUrl) {
+        // 校验对应的 Exporter 是否存在。若不存在，打印告警日志
         String key = getCacheKey(originInvoker);
         final ExporterChangeableWrapper<T> exporter = (ExporterChangeableWrapper<T>) bounds.get(key);
         if (exporter == null) {
             logger.warn(new IllegalStateException("error state, exporter should not be null"));
         } else {
+            // 创建 InvokerDelegete 对象
             final Invoker<T> invokerDelegete = new InvokerDelegete<T>(originInvoker, newInvokerUrl);
+            // 重新暴露 Invoker
+            // 设置到 ExporterChangeableWrapper 中
+            /**
+             * Protocol$Adaptive#export(Invoker) 方法，重新暴露 Invoker 对象。
+             * 😈 可能会有机智的胖友会问，原来的 Exporter 不进行销毁么?实际上不需要，原因有两点：
+             * 1、每个协议初始化的 Server 有缓存 ，所以重新初始化，可以重用缓存中的 Server 。
+             * 2、如果销毁原有 Exporter ，会导致缓存的 Server 也一起销毁。而且，即使不销毁，原有 Exporter 也就是一个对象，可以被回收掉。
+             * 第 12 行：调用 ExporterChangeableWrapper#setExporter(exporter) 方法，设置新的 Exporter 对象。
+             */
             exporter.setExporter(protocol.export(invokerDelegete));
         }
     }
@@ -310,7 +314,7 @@ public class RegistryProtocol implements Protocol {
     @Override
     @SuppressWarnings("unchecked")
     public <T> Invoker<T> refer(Class<T> type, URL url) throws RpcException {
-        // 获得真实的注册中心的 URL
+        // 获得真实的注册中心的 URL，如这设置为zookeeper
         url = url.setProtocol(url.getParameter(Constants.REGISTRY_KEY, Constants.DEFAULT_REGISTRY)).removeParameter(Constants.REGISTRY_KEY);
         // 获得注册中心
         Registry registry = registryFactory.getRegistry(url);
@@ -324,6 +328,7 @@ public class RegistryProtocol implements Protocol {
         String group = qs.get(Constants.GROUP_KEY);
         // 分组聚合，参见文档 http://dubbo.apache.org/zh-cn/docs/user/demos/group-merger.html
         //所谓分组聚合就是：一个provider的同一个service有多个实现，依靠group来区分，当consumer同时指定了几个group时，会每个group都调用一下，并把结果合并后再返回
+        //当引用多个服务分组时，会自动使用到分组聚合的特性
         if (group != null && group.length() > 0) {
             if ((Constants.COMMA_SPLIT_PATTERN.split(group)).length > 1
                     || "*".equals(group)) {
@@ -375,7 +380,8 @@ public class RegistryProtocol implements Protocol {
                 Constants.PROVIDERS_CATEGORY
                         + "," + Constants.CONFIGURATORS_CATEGORY
                         + "," + Constants.ROUTERS_CATEGORY));
-        // 创建 Invoker 对象
+        // 创建 Invoker 对象，cluster也是自适应对象，这里的directory中包含了所有真正的 invoker 如DubboInvoker
+        // 包装为带有cluster功能的invoker
         Invoker invoker = cluster.join(directory);
         // 向本地注册表，注册消费者
         ProviderConsumerRegTable.registerConsumer(invoker, url, subscribeUrl, directory);
@@ -389,10 +395,13 @@ public class RegistryProtocol implements Protocol {
 
     @Override
     public void destroy() {
+        // 获得 Exporter 数组
         List<Exporter<?>> exporters = new ArrayList<Exporter<?>>(bounds.values());
+        // 取消所有 Exporter 的暴露
         for (Exporter<?> exporter : exporters) {
             exporter.unexport();
         }
+        // 清空
         bounds.clear();
     }
 
@@ -422,10 +431,24 @@ public class RegistryProtocol implements Protocol {
      * 1.Ensure that the exporter returned by registryprotocol can be normal destroyed
      * 2.No need to re-register to the registry after notify
      * 3.The invoker passed by the export method , would better to be the invoker of exporter
+     * <p>
+     * OverrideListener 是 RegistryProtocol 内部类，实现 NotifyListener 接口
+     * <p>
+     * 重新 export ：protocol 中的 exporter destroy 问题
+     * <p>
+     * 1. 要求 registry protocol 返回的 exporter 可以正常 destroy
+     * 2. notify 后不需要重新向注册中心注册
+     * 3. export 方法传入的 invoker 最好能一直作为 exporter 的 invoker.
      */
     private class OverrideListener implements NotifyListener {
 
+        /**
+         * 订阅 URL 对象
+         */
         private final URL subscribeUrl;
+        /**
+         * 原始 Invoker 对象
+         */
         private final Invoker originInvoker;
 
         public OverrideListener(URL subscribeUrl, Invoker originalInvoker) {
@@ -439,21 +462,24 @@ public class RegistryProtocol implements Protocol {
         @Override
         public synchronized void notify(List<URL> urls) {
             logger.debug("original override urls: " + urls);
+            // 获得匹配的规则配置 URL 集合
             List<URL> matchedUrls = getMatchedUrls(urls, subscribeUrl);
             logger.debug("subscribe url: " + subscribeUrl + ", override urls: " + matchedUrls);
             // No matching results
             if (matchedUrls.isEmpty()) {
                 return;
             }
-
+            // 将配置规则 URL 集合，**转换**成对应的 Configurator 集合
             List<Configurator> configurators = RegistryDirectory.toConfigurators(matchedUrls);
 
+            // 获得真实的 Invoker 对象
             final Invoker<?> invoker;
             if (originInvoker instanceof InvokerDelegete) {
                 invoker = ((InvokerDelegete<?>) originInvoker).getInvoker();
             } else {
                 invoker = originInvoker;
             }
+            // 获得真实的 Invoker 的 URL 对象
             //The origin invoker
             URL originUrl = RegistryProtocol.this.getProviderUrl(invoker);
             String key = getCacheKey(originInvoker);
@@ -463,9 +489,12 @@ public class RegistryProtocol implements Protocol {
                 return;
             }
             //The current, may have been merged many times
+            // 获得 Invoker 当前的 URL 对象，可能已经被之前的配置规则合并过
+            // 基于 originUrl 对象，合并配置规则，生成新的 newUrl 对象
             URL currentUrl = exporter.getInvoker().getUrl();
             //Merged with this configuration
             URL newUrl = getConfigedInvokerUrl(configurators, originUrl);
+            // 判断新老 Url 不匹配，重新暴露 Invoker
             if (!currentUrl.equals(newUrl)) {
                 RegistryProtocol.this.doChangeLocalExport(originInvoker, newUrl);
                 logger.info("exported provider url changed, origin url: " + originUrl + ", old export url: " + currentUrl + ", new export url: " + newUrl);

@@ -466,10 +466,15 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         }
     }
 
+    /**
+     * 实现销毁公用的重试任务
+     */
     @Override
     public void destroy() {
+        // 调用父方法，取消注册和订阅
         super.destroy();
         try {
+            // 销毁重试任务
             retryFuture.cancel(true);
         } catch (Throwable t) {
             logger.warn(t.getMessage(), t);

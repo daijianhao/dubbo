@@ -540,17 +540,21 @@ public abstract class AbstractRegistry implements Registry {
 
     /**
      * 在 JVM 关闭时，调用 #destroy() 方法，进行取消注册和订阅。
+     *
+     * 无论是服务提供者还是消费者，都会向 Registry 发起注册和订阅，所以都需要进行取消
      */
     @Override
     public void destroy() {
         if (logger.isInfoEnabled()) {
             logger.info("Destroy registry:" + getUrl());
         }
+        // 取消注册
         Set<URL> destroyRegistered = new HashSet<URL>(getRegistered());
         if (!destroyRegistered.isEmpty()) {
             for (URL url : new HashSet<URL>(getRegistered())) {
                 if (url.getParameter(Constants.DYNAMIC_KEY, true)) {
                     try {
+                        // 取消注册
                         unregister(url);
                         if (logger.isInfoEnabled()) {
                             logger.info("Destroy unregister url " + url);
@@ -561,6 +565,7 @@ public abstract class AbstractRegistry implements Registry {
                 }
             }
         }
+        // 取消订阅
         Map<URL, Set<NotifyListener>> destroySubscribed = new HashMap<URL, Set<NotifyListener>>(getSubscribed());
         if (!destroySubscribed.isEmpty()) {
             for (Map.Entry<URL, Set<NotifyListener>> entry : destroySubscribed.entrySet()) {

@@ -119,8 +119,12 @@ public class ZookeeperRegistry extends FailbackRegistry {
         return zkClient.isConnected();
     }
 
+    /**
+     * FailbackRegistry 有多种实现类，会有销毁其对应的客户端连接的逻辑。以 ZookeeperRegistry 举例子
+     */
     @Override
     public void destroy() {
+        // 调用父方法，取消注册和订阅
         super.destroy();
         try {
             //关闭客户端
