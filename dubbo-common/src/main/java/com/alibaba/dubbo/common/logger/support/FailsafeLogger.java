@@ -20,6 +20,11 @@ import com.alibaba.dubbo.common.Version;
 import com.alibaba.dubbo.common.logger.Logger;
 import com.alibaba.dubbo.common.utils.NetUtils;
 
+/**
+ * 实现 Logger 接口，失败安全的 Logger 实现类
+ *
+ * 即使报错，也会被 try catch 掉。
+ */
 public class FailsafeLogger implements Logger {
 
     private Logger logger;
@@ -36,6 +41,11 @@ public class FailsafeLogger implements Logger {
         this.logger = logger;
     }
 
+    /**
+     * 拼接 Dubbo 的 version 和 host 到日志中
+     * @param msg
+     * @return
+     */
     private String appendContextMessage(String msg) {
         return " [DUBBO] " + msg + ", dubbo version: " + Version.getVersion() + ", current host: " + NetUtils.getLocalHost();
     }
