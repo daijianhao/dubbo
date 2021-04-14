@@ -33,7 +33,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.apache.dubbo.common.constants.CommonConstants.CONSUMER_SIDE;
 import static org.apache.dubbo.common.constants.CommonConstants.EXECUTOR_SERVICE_COMPONENT_KEY;
-import static org.apache.dubbo.common.constants.CommonConstants.SIDE_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.THREADS_KEY;
 
 /**
@@ -50,23 +49,38 @@ public class DefaultExecutorRepository implements ExecutorRepository {
 
     private ScheduledExecutorService serviceExporterExecutor;
 
+    public ScheduledExecutorService registryNotificationExecutor;
+
     private ScheduledExecutorService reconnectScheduledExecutor;
+
+    private ScheduledExecutorService serviceDiscveryAddressNotificationExecutor;
+
+    private ScheduledExecutorService metadataRetryExecutor;
 
     private ConcurrentMap<String, ConcurrentMap<Integer, ExecutorService>> data = new ConcurrentHashMap<>();
 
     public DefaultExecutorRepository() {
-//        for (int i = 0; i < DEFAULT_SCHEDULER_SIZE; i++) {
-//            ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("Dubbo-framework-scheduler"));
-//            scheduledExecutors.addItem(scheduler);
-//        }
+        for (int i = 0; i < DEFAULT_SCHEDULER_SIZE; i++) {
+            ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("Dubbo-framework-scheduler"));
+            scheduledExecutors.addItem(scheduler);
+        }
 //
 //        reconnectScheduledExecutor = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("Dubbo-reconnect-scheduler"));
         serviceExporterExecutor = Executors.newScheduledThreadPool(1, new NamedThreadFactory("Dubbo-exporter-scheduler"));
+        serviceDiscveryAddressNotificationExecutor = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("Dubbo-SD-address-refresh"));
+        registryNotificationExecutor = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("Dubbo-registry-notification"));
+        metadataRetryExecutor = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("Dubbo-metadata-retry"));
     }
 
+    /**
+     * Get called when the server or client instance initiating.
+     *
+     * @param url
+     * @return
+     */
     public synchronized ExecutorService createExecutorIfAbsent(URL url) {
         String componentKey = EXECUTOR_SERVICE_COMPONENT_KEY;
-        if (CONSUMER_SIDE.equalsIgnoreCase(url.getParameter(SIDE_KEY))) {
+        if (CONSUMER_SIDE.equalsIgnoreCase(url.getSide())) {
             componentKey = CONSUMER_SIDE;
         }
         Map<Integer, ExecutorService> executors = data.computeIfAbsent(componentKey, k -> new ConcurrentHashMap<>());
@@ -83,11 +97,18 @@ public class DefaultExecutorRepository implements ExecutorRepository {
 
     public ExecutorService getExecutor(URL url) {
         String componentKey = EXECUTOR_SERVICE_COMPONENT_KEY;
-        if (CONSUMER_SIDE.equalsIgnoreCase(url.getParameter(SIDE_KEY))) {
+        if (CONSUMER_SIDE.equalsIgnoreCase(url.getSide())) {
             componentKey = CONSUMER_SIDE;
         }
         Map<Integer, ExecutorService> executors = data.get(componentKey);
+
+        /**
+         * It's guaranteed that this method is called after {@link #createExecutorIfAbsent(URL)}, so data should already
+         * have Executor instances generated and stored.
+         */
         if (executors == null) {
+            logger.warn("No available executors, this is not expected, framework should call createExecutorIfAbsent first " +
+                    "before coming to here.");
             return null;
         }
 
@@ -139,6 +160,20 @@ public class DefaultExecutorRepository implements ExecutorRepository {
     @Override
     public ScheduledExecutorService getServiceExporterExecutor() {
         return serviceExporterExecutor;
+    }
+
+    @Override
+    public ScheduledExecutorService getRegistryNotificationExecutor() {
+        return registryNotificationExecutor;
+    }
+
+    public ScheduledExecutorService getServiceDiscoveryAddressNotificationExecutor() {
+        return serviceDiscveryAddressNotificationExecutor;
+    }
+
+    @Override
+    public ScheduledExecutorService getMetadataRetryExecutor() {
+        return metadataRetryExecutor;
     }
 
     @Override

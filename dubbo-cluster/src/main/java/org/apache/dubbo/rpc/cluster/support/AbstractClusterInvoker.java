@@ -29,14 +29,13 @@ import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcContext;
 import org.apache.dubbo.rpc.RpcException;
-import org.apache.dubbo.rpc.RpcInvocation;
+import org.apache.dubbo.rpc.cluster.ClusterInvoker;
 import org.apache.dubbo.rpc.cluster.Directory;
 import org.apache.dubbo.rpc.cluster.LoadBalance;
 import org.apache.dubbo.rpc.support.RpcUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_LOADBALANCE;
@@ -49,7 +48,7 @@ import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_CLUSTER_STICKY;
 /**
  * AbstractClusterInvoker
  */
-public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
+public abstract class AbstractClusterInvoker<T> implements ClusterInvoker<T> {
 
     private static final Logger logger = LoggerFactory.getLogger(AbstractClusterInvoker.class);
 
@@ -80,12 +79,16 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
 
     @Override
     public Class<T> getInterface() {
-        return directory.getInterface();
+        return getDirectory().getInterface();
     }
 
     @Override
     public URL getUrl() {
-        return directory.getUrl();
+        return getDirectory().getConsumerUrl();
+    }
+
+    public URL getRegistryUrl() {
+        return getDirectory().getUrl();
     }
 
     @Override
@@ -94,7 +97,7 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
         if (invoker != null) {
             return invoker.isAvailable();
         }
-        return directory.isAvailable();
+        return getDirectory().isAvailable();
     }
 
     public Directory<T> getDirectory() {
@@ -104,8 +107,13 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
     @Override
     public void destroy() {
         if (destroyed.compareAndSet(false, true)) {
-            directory.destroy();
+            getDirectory().destroy();
         }
+    }
+
+    @Override
+    public boolean isDestroyed() {
+        return destroyed.get();
     }
 
     /**
@@ -151,6 +159,7 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
         if (sticky) {
             stickyInvoker = invoker;
         }
+
         return invoker;
     }
 
@@ -186,6 +195,7 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
                 logger.error("cluster reselect fail reason is :" + t.getMessage() + " if can not solve, you can set cluster.availablecheck=false in url", t);
             }
         }
+
         return invoker;
     }
 
@@ -244,10 +254,10 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
         checkWhetherDestroyed();
 
         // binding attachments into invocation.
-        Map<String, Object> contextAttachments = RpcContext.getContext().getAttachments();
-        if (contextAttachments != null && contextAttachments.size() != 0) {
-            ((RpcInvocation) invocation).addAttachments(contextAttachments);
-        }
+//        Map<String, Object> contextAttachments = RpcContext.getContext().getObjectAttachments();
+//        if (contextAttachments != null && contextAttachments.size() != 0) {
+//            ((RpcInvocation) invocation).addObjectAttachmentsIfAbsent(contextAttachments);
+//        }
 
         List<Invoker<T>> invokers = list(invocation);
         LoadBalance loadbalance = initLoadBalance(invokers, invocation);
@@ -272,19 +282,30 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
         if (CollectionUtils.isEmpty(invokers)) {
             throw new RpcException(RpcException.NO_INVOKER_AVAILABLE_AFTER_FILTER, "Failed to invoke the method "
                     + invocation.getMethodName() + " in the service " + getInterface().getName()
-                    + ". No provider available for the service " + directory.getUrl().getServiceKey()
-                    + " from registry " + directory.getUrl().getAddress()
+                    + ". No provider available for the service " + getDirectory().getConsumerUrl().getServiceKey()
+                    + " from registry " + getDirectory().getUrl().getAddress()
                     + " on the consumer " + NetUtils.getLocalHost()
                     + " using the dubbo version " + Version.getVersion()
                     + ". Please check if the providers have been started and registered.");
         }
     }
 
+    protected Result invokeWithContext(Invoker<T> invoker, Invocation invocation) {
+        setContext(invoker);
+        Result result;
+        try {
+            result = invoker.invoke(invocation);
+        } finally {
+            clearContext(invoker);
+        }
+        return result;
+    }
+
     protected abstract Result doInvoke(Invocation invocation, List<Invoker<T>> invokers,
                                        LoadBalance loadbalance) throws RpcException;
 
     protected List<Invoker<T>> list(Invocation invocation) throws RpcException {
-        return directory.list(invocation);
+        return getDirectory().list(invocation);
     }
 
     /**
@@ -300,10 +321,27 @@ public abstract class AbstractClusterInvoker<T> implements Invoker<T> {
      */
     protected LoadBalance initLoadBalance(List<Invoker<T>> invokers, Invocation invocation) {
         if (CollectionUtils.isNotEmpty(invokers)) {
-            return ExtensionLoader.getExtensionLoader(LoadBalance.class).getExtension(invokers.get(0).getUrl()
-                    .getMethodParameter(RpcUtils.getMethodName(invocation), LOADBALANCE_KEY, DEFAULT_LOADBALANCE));
+            return ExtensionLoader.getExtensionLoader(LoadBalance.class).getExtension(
+                    invokers.get(0).getUrl().getMethodParameter(
+                            RpcUtils.getMethodName(invocation), LOADBALANCE_KEY, DEFAULT_LOADBALANCE
+                    )
+            );
         } else {
             return ExtensionLoader.getExtensionLoader(LoadBalance.class).getExtension(DEFAULT_LOADBALANCE);
         }
+    }
+
+
+    private void setContext(Invoker<T> invoker) {
+        RpcContext context = RpcContext.getContext();
+        context.setInvoker(invoker)
+                .setRemoteAddress(invoker.getUrl().getHost(), invoker.getUrl().getPort())
+                .setRemoteApplicationName(invoker.getUrl().getRemoteApplication());
+    }
+
+    private void clearContext(Invoker<T> invoker) {
+        // do nothing
+        RpcContext context = RpcContext.getContext();
+        context.setInvoker(null);
     }
 }

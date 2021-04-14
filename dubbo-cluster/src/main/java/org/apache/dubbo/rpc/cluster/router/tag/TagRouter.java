@@ -21,7 +21,6 @@ import org.apache.dubbo.common.config.configcenter.ConfigChangeType;
 import org.apache.dubbo.common.config.configcenter.ConfigChangedEvent;
 import org.apache.dubbo.common.config.configcenter.ConfigurationListener;
 import org.apache.dubbo.common.config.configcenter.DynamicConfiguration;
-import org.apache.dubbo.common.constants.CommonConstants;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.CollectionUtils;
@@ -97,8 +96,8 @@ public class TagRouter extends AbstractRouter implements ConfigurationListener {
         }
 
         List<Invoker<T>> result = invokers;
-        String tag = StringUtils.isEmpty((String) invocation.getAttachment(TAG_KEY)) ? url.getParameter(TAG_KEY) :
-                (String) invocation.getAttachment(TAG_KEY);
+        String tag = StringUtils.isEmpty(invocation.getAttachment(TAG_KEY)) ? url.getParameter(TAG_KEY) :
+                invocation.getAttachment(TAG_KEY);
 
         // if we are requesting for a Provider with a specific tag
         if (StringUtils.isNotEmpty(tag)) {
@@ -163,8 +162,8 @@ public class TagRouter extends AbstractRouter implements ConfigurationListener {
     private <T> List<Invoker<T>> filterUsingStaticTag(List<Invoker<T>> invokers, URL url, Invocation invocation) {
         List<Invoker<T>> result = invokers;
         // Dynamic param
-        String tag = StringUtils.isEmpty((String) invocation.getAttachment(TAG_KEY)) ? url.getParameter(TAG_KEY) :
-                (String) invocation.getAttachment(TAG_KEY);
+        String tag = StringUtils.isEmpty(invocation.getAttachment(TAG_KEY)) ? url.getParameter(TAG_KEY) :
+                invocation.getAttachment(TAG_KEY);
         // Tag request
         if (!StringUtils.isEmpty(tag)) {
             result = filterInvoker(invokers, invoker -> tag.equals(invoker.getUrl().getParameter(TAG_KEY)));
@@ -189,10 +188,22 @@ public class TagRouter extends AbstractRouter implements ConfigurationListener {
     }
 
     private boolean isForceUseTag(Invocation invocation) {
-        return Boolean.valueOf((String) invocation.getAttachment(FORCE_USE_TAG, url.getParameter(FORCE_USE_TAG, "false")));
+        return Boolean.valueOf(invocation.getAttachment(FORCE_USE_TAG, url.getParameter(FORCE_USE_TAG, "false")));
     }
 
     private <T> List<Invoker<T>> filterInvoker(List<Invoker<T>> invokers, Predicate<Invoker<T>> predicate) {
+        boolean filter = false;
+        for (int i = 0; i < invokers.size(); ++i) {
+            Invoker<T> invoker = invokers.get(i);
+            if (!predicate.test(invoker)) {
+                filter = true;
+                break;
+            }
+        }
+        if (!filter) {
+            return invokers;
+        }
+
         return invokers.stream()
                 .filter(predicate)
                 .collect(Collectors.toList());
@@ -236,7 +247,7 @@ public class TagRouter extends AbstractRouter implements ConfigurationListener {
 
         Invoker<T> invoker = invokers.get(0);
         URL url = invoker.getUrl();
-        String providerApplication = url.getParameter(CommonConstants.REMOTE_APPLICATION_KEY);
+        String providerApplication = url.getRemoteApplication();
 
         if (StringUtils.isEmpty(providerApplication)) {
             logger.error("TagRouter must getConfig from or subscribe to a specific application, but the application " +

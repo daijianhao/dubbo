@@ -17,6 +17,7 @@
 package org.apache.dubbo.registry.zookeeper;
 
 import org.apache.dubbo.common.URL;
+import org.apache.dubbo.common.utils.NetUtils;
 import org.apache.dubbo.event.EventDispatcher;
 import org.apache.dubbo.registry.client.DefaultServiceInstance;
 import org.apache.dubbo.registry.client.ServiceInstance;
@@ -32,7 +33,7 @@ import java.util.Map;
 
 import static java.util.Arrays.asList;
 import static org.apache.dubbo.common.utils.NetUtils.getAvailablePort;
-import static org.apache.dubbo.registry.zookeeper.util.CuratorFrameworkUtils.generateId;
+import static org.apache.dubbo.registry.client.metadata.ServiceInstanceMetadataUtils.INSTANCE_REVISION_UPDATED_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -72,9 +73,9 @@ public class ZookeeperServiceDiscoveryTest {
     }
 
     @Test
-    public void testRegistration() {
+    public void testRegistration() throws InterruptedException {
 
-        DefaultServiceInstance serviceInstance = createServiceInstance(SERVICE_NAME, LOCALHOST, 8080);
+        DefaultServiceInstance serviceInstance = createServiceInstance(SERVICE_NAME, LOCALHOST, NetUtils.getAvailablePort());
 
         discovery.register(serviceInstance);
 
@@ -86,6 +87,7 @@ public class ZookeeperServiceDiscoveryTest {
         Map<String, String> metadata = new HashMap<>();
         metadata.put("message", "Hello,World");
         serviceInstance.setMetadata(metadata);
+        serviceInstance.getExtendParams().put(INSTANCE_REVISION_UPDATED_KEY, "true");
 
         discovery.update(serviceInstance);
 
@@ -101,7 +103,7 @@ public class ZookeeperServiceDiscoveryTest {
     }
 
     private DefaultServiceInstance createServiceInstance(String serviceName, String host, int port) {
-        return new DefaultServiceInstance(generateId(host, port), serviceName, host, port);
+        return new DefaultServiceInstance(serviceName, host, port);
     }
 
 //    @Test

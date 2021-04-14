@@ -34,13 +34,18 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.dubbo.common.constants.CommonConstants.APPLICATION_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.DUBBO;
 import static org.apache.dubbo.common.constants.CommonConstants.DUMP_DIRECTORY;
 import static org.apache.dubbo.common.constants.CommonConstants.HOST_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.METADATA_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.REGISTRY_LOCAL_FILE_CACHE_ENABLED;
 import static org.apache.dubbo.common.constants.CommonConstants.SHUTDOWN_WAIT_KEY;
 import static org.apache.dubbo.common.constants.QosConstants.ACCEPT_FOREIGN_IP;
 import static org.apache.dubbo.common.constants.QosConstants.QOS_ENABLE;
 import static org.apache.dubbo.common.constants.QosConstants.QOS_HOST;
 import static org.apache.dubbo.common.constants.QosConstants.QOS_PORT;
+import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_PUBLISH_INSTANCE_KEY;
+import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_PUBLISH_INTERFACE_KEY;
 import static org.apache.dubbo.config.Constants.DEVELOPMENT_ENVIRONMENT;
 import static org.apache.dubbo.config.Constants.PRODUCTION_ENVIRONMENT;
 import static org.apache.dubbo.config.Constants.TEST_ENVIRONMENT;
@@ -157,6 +162,32 @@ public class ApplicationConfig extends AbstractConfig {
     private Boolean registerConsumer;
 
     private String repository;
+
+    private Boolean enableFileCache;
+
+    private Boolean publishInterface;
+
+    private Boolean publishInstance;
+
+    /**
+     * The preferred protocol(name) of this application
+     * convenient for places where it's hard to determine which is the preferred protocol
+     */
+    private String protocol;
+
+    /**
+     * Metadata Service, used in Service Discovery
+     */
+    private Integer metadataServicePort;
+
+    /**
+     * used to set extensions of probe in qos
+     */
+    private String livenessProbe;
+
+    private String readinessProbe;
+
+    private String startupProbe;
 
     public ApplicationConfig() {
     }
@@ -419,6 +450,7 @@ public class ApplicationConfig extends AbstractConfig {
         return !StringUtils.isEmpty(name);
     }
 
+    @Parameter(key = METADATA_KEY)
     public String getMetadataType() {
         return metadataType;
     }
@@ -443,6 +475,78 @@ public class ApplicationConfig extends AbstractConfig {
         this.repository = repository;
     }
 
+    @Parameter(key = REGISTRY_LOCAL_FILE_CACHE_ENABLED)
+    public Boolean getEnableFileCache() {
+        return enableFileCache;
+    }
+
+    public void setEnableFileCache(Boolean enableFileCache) {
+        this.enableFileCache = enableFileCache;
+    }
+
+    @Parameter(key = REGISTRY_PUBLISH_INTERFACE_KEY)
+    public Boolean getPublishInterface() {
+        return publishInterface;
+    }
+
+    public void setPublishInterface(Boolean publishInterface) {
+        this.publishInterface = publishInterface;
+    }
+
+    @Parameter(key = REGISTRY_PUBLISH_INSTANCE_KEY)
+    public Boolean getPublishInstance() {
+        return publishInstance;
+    }
+
+    public void setPublishInstance(Boolean publishInstance) {
+        this.publishInstance = publishInstance;
+    }
+
+    @Parameter(excluded = true, key="application-protocol")
+    public String getProtocol() {
+        return protocol == null ? DUBBO : protocol;
+    }
+
+    public void setProtocol(String protocol) {
+        this.protocol = protocol;
+    }
+
+    @Parameter(key = "metadata-service-port")
+    public Integer getMetadataServicePort() {
+        return metadataServicePort;
+    }
+
+    public void setMetadataServicePort(Integer metadataServicePort) {
+        this.metadataServicePort = metadataServicePort;
+    }
+
+    @Parameter(key = "liveness-probe")
+    public String getLivenessProbe() {
+        return livenessProbe;
+    }
+
+    public void setLivenessProbe(String livenessProbe) {
+        this.livenessProbe = livenessProbe;
+    }
+
+    @Parameter(key = "readiness-probe")
+    public String getReadinessProbe() {
+        return readinessProbe;
+    }
+
+    public void setReadinessProbe(String readinessProbe) {
+        this.readinessProbe = readinessProbe;
+    }
+
+    @Parameter(key = "startup-probe")
+    public String getStartupProbe() {
+        return startupProbe;
+    }
+
+    public void setStartupProbe(String startupProbe) {
+        this.startupProbe = startupProbe;
+    }
+
     @Override
     public void refresh() {
         super.refresh();
@@ -462,7 +566,13 @@ public class ApplicationConfig extends AbstractConfig {
             for (InfraAdapter adapter : adapters) {
                 Map<String, String> extraParameters = adapter.getExtraAttributes(inputParameters);
                 if (CollectionUtils.isNotEmptyMap(extraParameters)) {
-                    parameters.putAll(extraParameters);
+                    extraParameters.forEach((key, value) -> {
+                        String prefix = this.getPrefix() + ".";
+                        if (key.startsWith(prefix)) {
+                            key = key.substring(prefix.length());
+                        }
+                        parameters.put(key, value);
+                    });
                 }
             }
         }

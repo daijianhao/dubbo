@@ -19,10 +19,11 @@ package org.apache.dubbo.metadata;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.extension.SPI;
-import org.apache.dubbo.metadata.store.InMemoryWritableMetadataService;
 import org.apache.dubbo.rpc.model.ApplicationModel;
 
-import static org.apache.dubbo.common.constants.CommonConstants.DEFAULT_METADATA_STORAGE_TYPE;
+import java.util.Map;
+import java.util.Set;
+
 import static org.apache.dubbo.common.extension.ExtensionLoader.getExtensionLoader;
 
 /**
@@ -31,7 +32,7 @@ import static org.apache.dubbo.common.extension.ExtensionLoader.getExtensionLoad
  *
  * @since 2.7.5
  */
-@SPI(DEFAULT_METADATA_STORAGE_TYPE)
+@SPI("default")
 public interface WritableMetadataService extends MetadataService {
     /**
      * Gets the current Dubbo Service name
@@ -60,15 +61,6 @@ public interface WritableMetadataService extends MetadataService {
     boolean unexportURL(URL url);
 
     /**
-     * fresh Exports
-     *
-     * @return If success , return <code>true</code>
-     */
-    default boolean refreshMetadata(String exportedRevision, String subscribedRevision) {
-        return true;
-    }
-
-    /**
      * Subscribes a {@link URL}
      *
      * @param url a {@link URL}
@@ -86,17 +78,32 @@ public interface WritableMetadataService extends MetadataService {
 
     void publishServiceDefinition(URL providerUrl);
 
+    default void setMetadataServiceURL(URL url) {
+
+    }
+
+    default URL getMetadataServiceURL() {
+        return null;
+    }
+
+    void putCachedMapping(String serviceKey, Set<String> apps);
+
+    Map<String, Set<String>> getCachedMapping();
+
+    Set<String> getCachedMapping(String mappingKey);
+
+    Set<String> getCachedMapping(URL consumerURL);
+
+    Set<String> removeCachedMapping(String serviceKey);
+
+    MetadataInfo getDefaultMetadataInfo();
+
     /**
      * Get {@link ExtensionLoader#getDefaultExtension() the defautl extension} of {@link WritableMetadataService}
      *
      * @return non-null
-     * @see InMemoryWritableMetadataService
      */
     static WritableMetadataService getDefaultExtension() {
         return getExtensionLoader(WritableMetadataService.class).getDefaultExtension();
-    }
-
-    static WritableMetadataService getExtension(String name) {
-        return getExtensionLoader(WritableMetadataService.class).getOrDefaultExtension(name);
     }
 }

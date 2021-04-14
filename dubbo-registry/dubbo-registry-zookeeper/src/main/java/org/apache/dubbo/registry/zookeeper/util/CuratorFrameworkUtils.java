@@ -85,7 +85,7 @@ public abstract class CuratorFrameworkUtils {
         String host = instance.getAddress();
         int port = instance.getPort();
         ZookeeperInstance zookeeperInstance = instance.getPayload();
-        DefaultServiceInstance serviceInstance = new DefaultServiceInstance(instance.getId(), name, host, port);
+        DefaultServiceInstance serviceInstance = new DefaultServiceInstance(name, host, port);
         serviceInstance.setMetadata(zookeeperInstance.getMetadata());
         return serviceInstance;
     }
@@ -95,7 +95,7 @@ public abstract class CuratorFrameworkUtils {
         String serviceName = serviceInstance.getServiceName();
         String host = serviceInstance.getHost();
         int port = serviceInstance.getPort();
-        Map<String, String> metadata = serviceInstance.getMetadata();
+        Map<String, String> metadata = serviceInstance.getSortedMetadata();
         String id = generateId(host, port);
         ZookeeperInstance zookeeperInstance = new ZookeeperInstance(null, serviceName, metadata);
         try {

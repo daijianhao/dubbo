@@ -16,37 +16,44 @@
  */
 package org.apache.dubbo.config.spring.beans.factory.annotation;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.dubbo.common.utils.ClassUtils;
+import org.apache.dubbo.config.annotation.DubboReference;
 import org.apache.dubbo.config.annotation.Reference;
 import org.apache.dubbo.config.annotation.Service;
+import org.apache.dubbo.config.context.ConfigManager;
 import org.apache.dubbo.config.spring.ReferenceBean;
+import org.apache.dubbo.config.spring.ReferenceBeanManager;
 import org.apache.dubbo.config.spring.ServiceBean;
-import org.apache.dubbo.config.spring.context.event.ServiceBeanExportedEvent;
-
-import com.alibaba.spring.beans.factory.annotation.AbstractAnnotationBeanPostProcessor;
+import org.apache.dubbo.config.spring.util.DubboBeanUtils;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.PropertyValue;
+import org.springframework.beans.PropertyValues;
+import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.annotation.InjectionMetadata;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
-import org.springframework.beans.factory.config.RuntimeBeanReference;
-import org.springframework.beans.factory.support.AbstractBeanDefinition;
+import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
+import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
-import org.springframework.context.ApplicationEvent;
-import org.springframework.context.ApplicationListener;
 import org.springframework.core.annotation.AnnotationAttributes;
+import org.springframework.util.Assert;
+import org.springframework.util.ObjectUtils;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.beans.PropertyDescriptor;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import static com.alibaba.spring.util.AnnotationUtils.getAttribute;
-import static com.alibaba.spring.util.AnnotationUtils.getAttributes;
-import static java.lang.reflect.Proxy.newProxyInstance;
 import static org.apache.dubbo.config.spring.beans.factory.annotation.ServiceBeanNameBuilder.create;
 import static org.springframework.util.StringUtils.hasText;
 
@@ -54,10 +61,13 @@ import static org.springframework.util.StringUtils.hasText;
  * {@link org.springframework.beans.factory.config.BeanPostProcessor} implementation
  * that Consumer service {@link Reference} annotated fields
  *
+ * @see DubboReference
+ * @see Reference
+ * @see com.alibaba.dubbo.config.annotation.Reference
  * @since 2.5.7
  */
-public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBeanPostProcessor implements
-        ApplicationContextAware, ApplicationListener {
+public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBeanPostProcessor
+        implements ApplicationContextAware, BeanDefinitionRegistryPostProcessor {
 
     /**
      * The bean name of {@link ReferenceAnnotationBeanPostProcessor}
@@ -69,11 +79,7 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
      */
     private static final int CACHE_SIZE = Integer.getInteger(BEAN_NAME + ".cache.size", 32);
 
-    private final ConcurrentMap<String, ReferenceBean<?>> referenceBeanCache =
-            new ConcurrentHashMap<>(CACHE_SIZE);
-
-    private final ConcurrentHashMap<String, ReferenceBeanInvocationHandler> localReferenceBeanInvocationHandlerCache =
-            new ConcurrentHashMap<>(CACHE_SIZE);
+    private final Log logger = LogFactory.getLog(getClass());
 
     private final ConcurrentMap<InjectionMetadata.InjectedElement, ReferenceBean<?>> injectedFieldReferenceBeanCache =
             new ConcurrentHashMap<>(CACHE_SIZE);
@@ -83,98 +89,187 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
 
     private ApplicationContext applicationContext;
 
+    private ReferenceBeanManager referenceBeanManager;
+    private BeanDefinitionRegistry beanDefinitionRegistry;
+
     /**
-     * To support the legacy annotation that is @com.alibaba.dubbo.config.annotation.Reference since 2.7.3
+     * {@link com.alibaba.dubbo.config.annotation.Reference @com.alibaba.dubbo.config.annotation.Reference} has been supported since 2.7.3
+     * <p>
+     * {@link DubboReference @DubboReference} has been supported since 2.7.7
      */
     public ReferenceAnnotationBeanPostProcessor() {
-        super(Reference.class, com.alibaba.dubbo.config.annotation.Reference.class);
+        super(DubboReference.class, Reference.class, com.alibaba.dubbo.config.annotation.Reference.class);
     }
 
-    /**
-     * Gets all beans of {@link ReferenceBean}
-     *
-     * @return non-null read-only {@link Collection}
-     * @since 2.5.9
-     */
-    public Collection<ReferenceBean<?>> getReferenceBeans() {
-        return referenceBeanCache.values();
+    @Override
+    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+        this.beanDefinitionRegistry = registry;
     }
 
-    /**
-     * Get {@link ReferenceBean} {@link Map} in injected field.
-     *
-     * @return non-null {@link Map}
-     * @since 2.5.11
-     */
-    public Map<InjectionMetadata.InjectedElement, ReferenceBean<?>> getInjectedFieldReferenceBeanMap() {
-        return Collections.unmodifiableMap(injectedFieldReferenceBeanCache);
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+        DubboBeanUtils.registerBeansIfNotExists(beanDefinitionRegistry);
+
+        String[] beanNames = beanFactory.getBeanDefinitionNames();
+        for (String beanName : beanNames) {
+            Class<?> beanType;
+            if (beanFactory.isFactoryBean(beanName)){
+                BeanDefinition beanDefinition = beanFactory.getBeanDefinition(beanName);
+                if (isReferenceBean(beanDefinition)) {
+                    continue;
+                }
+                String beanClassName = beanDefinition.getBeanClassName();
+                beanType = ClassUtils.resolveClass(beanClassName, getClassLoader());
+            } else {
+                beanType = beanFactory.getType(beanName);
+            }
+            if (beanType != null) {
+                AnnotatedInjectionMetadata metadata = findInjectionMetadata(beanName, beanType, null);
+                try {
+                    prepareInjection(metadata);
+                } catch (Exception e) {
+                    logger.warn("Prepare dubbo reference injection element failed", e);
+                }
+            }
+        }
     }
 
-    /**
-     * Get {@link ReferenceBean} {@link Map} in injected method.
-     *
-     * @return non-null {@link Map}
-     * @since 2.5.11
-     */
-    public Map<InjectionMetadata.InjectedElement, ReferenceBean<?>> getInjectedMethodReferenceBeanMap() {
-        return Collections.unmodifiableMap(injectedMethodReferenceBeanCache);
+    @Override
+    public void postProcessMergedBeanDefinition(RootBeanDefinition beanDefinition, Class<?> beanType, String beanName) {
+        if (beanType != null) {
+            if (isReferenceBean(beanDefinition)) {
+                //mark property value as optional
+                List<PropertyValue> propertyValues = beanDefinition.getPropertyValues().getPropertyValueList();
+                for (PropertyValue propertyValue : propertyValues) {
+                    propertyValue.setOptional(true);
+                }
+            } else {
+                AnnotatedInjectionMetadata metadata = findInjectionMetadata(beanName, beanType, null);
+                metadata.checkConfigMembers(beanDefinition);
+                try {
+                    prepareInjection(metadata);
+                } catch (Exception e) {
+                    logger.warn("Prepare dubbo reference injection element failed", e);
+                }
+            }
+        }
+    }
+
+    @Override
+    public PropertyValues postProcessPropertyValues(
+            PropertyValues pvs, PropertyDescriptor[] pds, Object bean, String beanName) throws BeanCreationException {
+
+        try {
+            AnnotatedInjectionMetadata metadata = findInjectionMetadata(beanName, bean.getClass(), pvs);
+            prepareInjection(metadata);
+            metadata.inject(bean, beanName, pvs);
+        } catch (BeanCreationException ex) {
+            throw ex;
+        } catch (Throwable ex) {
+            throw new BeanCreationException(beanName, "Injection of @" + getAnnotationType().getSimpleName()
+                    + " dependencies is failed", ex);
+        }
+        return pvs;
+    }
+
+    private boolean isReferenceBean(BeanDefinition beanDefinition) {
+        return ReferenceBean.class.getName().equals(beanDefinition.getBeanClassName());
+    }
+
+    protected void prepareInjection(AnnotatedInjectionMetadata metadata) throws Exception {
+        //find and registry bean definition for @DubboReference/@Reference
+        for (AnnotatedFieldElement fieldElement : metadata.getFieldElements()) {
+            if (fieldElement.refKey != null) {
+                continue;
+            }
+            Class<?> injectedType = fieldElement.field.getType();
+            AnnotationAttributes attributes = fieldElement.attributes;
+            ReferenceBean referenceBean = getReferenceBean(injectedType, attributes);
+
+            //associate fieldElement and reference bean
+            fieldElement.refKey = referenceBean.getId();
+            injectedFieldReferenceBeanCache.put(fieldElement, referenceBean);
+
+        }
+
+        for (AnnotatedMethodElement methodElement : metadata.getMethodElements()) {
+            if (methodElement.refKey != null) {
+                continue;
+            }
+            Class<?> injectedType = methodElement.getInjectedType();
+            AnnotationAttributes attributes = methodElement.attributes;
+            ReferenceBean referenceBean = getReferenceBean(injectedType, attributes);
+
+            //associate fieldElement and reference bean
+            methodElement.refKey = referenceBean.getId();
+            injectedMethodReferenceBeanCache.put(methodElement, referenceBean);
+        }
+    }
+
+    private ReferenceBean getReferenceBean(Class<?> injectedType, AnnotationAttributes attributes) throws Exception {
+        // referenceBeanName
+        String referenceBeanName = getReferenceBeanName(attributes, injectedType);
+
+        // reuse exist reference bean?
+        ReferenceBean referenceBean = referenceBeanManager.get(referenceBeanName);
+
+        //create referenceBean
+        if (referenceBean == null) {
+            //handle injvm/localServiceBean
+            /**
+             * The name of bean that annotated Dubbo's {@link Service @Service} in local Spring {@link ApplicationContext}
+             */
+            String localServiceBeanName = buildReferencedBeanName(attributes, injectedType);
+            boolean localServiceBean = isLocalServiceBean(localServiceBeanName, attributes);
+            if (localServiceBean) { // If the local @Service Bean exists
+                attributes.put("injvm", Boolean.TRUE);
+                //  Issue : https://github.com/apache/dubbo/issues/6224
+                //exportServiceBeanIfNecessary(localServiceBeanName); // If the referenced ServiceBean exits, export it immediately
+            }
+
+            //check interfaceClass
+            if (attributes.get("interfaceName") == null && attributes.get("interfaceClass") == null) {
+                Class<?> interfaceClass = injectedType;
+                Assert.isTrue(interfaceClass.isInterface(),
+                        "The class of field or method that was annotated @DubboReference is not an interface!");
+                attributes.put("interfaceClass", interfaceClass);
+            }
+
+            //init reference bean
+            try {
+                //registry referenceBean
+                RootBeanDefinition beanDefinition = new RootBeanDefinition();
+                beanDefinition.setBeanClassName(ReferenceBean.class.getName());
+                //set autowireCandidate to false for local call, avoiding multiple candidate beans for @Autowire
+                beanDefinition.setAutowireCandidate(!localServiceBean);
+                //beanDefinition.getPropertyValues()
+
+                referenceBean = new ReferenceBean(attributes);
+                referenceBean.setId(referenceBeanName);
+                referenceBean.setApplicationContext(applicationContext);
+                referenceBean.setBeanClassLoader(getClassLoader());
+                referenceBean.afterPropertiesSet();
+
+                beanDefinitionRegistry.registerBeanDefinition(referenceBeanName, beanDefinition);
+                getBeanFactory().registerSingleton(referenceBeanName, referenceBean);
+                //cache reference bean, avoid re-inject same element after prepare reference bean
+                referenceBeanManager.addReference(referenceBean);
+            } catch (Exception e) {
+                throw new Exception("Create dubbo reference bean failed", e);
+            }
+        }
+        return referenceBean;
     }
 
     @Override
     protected Object doGetInjectedBean(AnnotationAttributes attributes, Object bean, String beanName, Class<?> injectedType,
-                                       InjectionMetadata.InjectedElement injectedElement) throws Exception {
-        /**
-         * The name of bean that annotated Dubbo's {@link Service @Service} in local Spring {@link ApplicationContext}
-         */
-        String referencedBeanName = buildReferencedBeanName(attributes, injectedType);
+                                       AnnotatedInjectElement injectedElement) throws Exception {
 
-        /**
-         * The name of bean that is declared by {@link Reference @Reference} annotation injection
-         */
-        String referenceBeanName = getReferenceBeanName(attributes, injectedType);
-
-        ReferenceBean referenceBean = buildReferenceBeanIfAbsent(referenceBeanName, attributes, injectedType);
-
-        registerReferenceBean(referencedBeanName, referenceBean, attributes, injectedType);
-
-        cacheInjectedReferenceBean(referenceBean, injectedElement);
-
-        return getOrCreateProxy(referencedBeanName, referenceBeanName, referenceBean, injectedType);
-    }
-
-    /**
-     * Register an instance of {@link ReferenceBean} as a Spring Bean
-     *
-     * @param referencedBeanName The name of bean that annotated Dubbo's {@link Service @Service} in the Spring {@link ApplicationContext}
-     * @param referenceBean      the instance of {@link ReferenceBean} is about to register into the Spring {@link ApplicationContext}
-     * @param attributes         the {@link AnnotationAttributes attributes} of {@link Reference @Reference}
-     * @param interfaceClass     the {@link Class class} of Service interface
-     * @since 2.7.3
-     */
-    private void registerReferenceBean(String referencedBeanName, ReferenceBean referenceBean,
-                                       AnnotationAttributes attributes,
-                                       Class<?> interfaceClass) {
-
-        ConfigurableListableBeanFactory beanFactory = getBeanFactory();
-
-        String beanName = getReferenceBeanName(attributes, interfaceClass);
-
-        if (existsServiceBean(referencedBeanName)) { // If @Service bean is local one
-            /**
-             * Get  the @Service's BeanDefinition from {@link BeanFactory}
-             * Refer to {@link ServiceAnnotationBeanPostProcessor#buildServiceBeanDefinition}
-             */
-            AbstractBeanDefinition beanDefinition = (AbstractBeanDefinition) beanFactory.getBeanDefinition(referencedBeanName);
-            RuntimeBeanReference runtimeBeanReference = (RuntimeBeanReference) beanDefinition.getPropertyValues().get("ref");
-            // The name of bean annotated @Service
-            String serviceBeanName = runtimeBeanReference.getBeanName();
-            // register Alias rather than a new bean name, in order to reduce duplicated beans
-            beanFactory.registerAlias(serviceBeanName, beanName);
-        } else { // Remote @Service Bean
-            if (!beanFactory.containsBean(beanName)) {
-                beanFactory.registerSingleton(beanName, referenceBean);
-            }
+        if (injectedElement.refKey == null) {
+            throw new IllegalStateException("The AnnotatedInjectElement of @DubboReference should be inited before injection");
         }
+
+        return getBeanFactory().getBean(injectedElement.refKey);
     }
 
     /**
@@ -208,10 +303,19 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
 
         if (!attributes.isEmpty()) {
             beanNameBuilder.append('(');
-            for (Map.Entry<String, Object> entry : attributes.entrySet()) {
-                beanNameBuilder.append(entry.getKey())
+            //sort attributes keys
+            List<String> sortedAttrKeys = new ArrayList<>(attributes.keySet());
+            Collections.sort(sortedAttrKeys);
+            for (String key : sortedAttrKeys) {
+                Object value = attributes.get(key);
+                //handle method array, generic array
+                if (value!=null && value.getClass().isArray()) {
+                    Object[] array = ObjectUtils.toObjectArray(value);
+                    value = Arrays.toString(array);
+                }
+                beanNameBuilder.append(key)
                         .append('=')
-                        .append(entry.getValue())
+                        .append(value)
                         .append(',');
             }
             // replace the latest "," to be ")"
@@ -220,87 +324,59 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
 
         beanNameBuilder.append(" ").append(interfaceClass.getName());
 
+        //TODO remove invalid chars
+        //TODO test @DubboReference with Method config
+        //.replaceAll("[<>]", "_")
         return beanNameBuilder.toString();
     }
 
+    /**
+     * Is Local Service bean or not?
+     *
+     * @param referencedBeanName the bean name to the referenced bean
+     * @return If the target referenced bean is existed, return <code>true</code>, or <code>false</code>
+     * @since 2.7.6
+     */
+    private boolean isLocalServiceBean(String referencedBeanName, AnnotationAttributes attributes) {
+        return existsServiceBean(referencedBeanName) && !isRemoteReferenceBean(attributes);
+    }
+
+    /**
+     * Check the {@link ServiceBean} is exited or not
+     *
+     * @param referencedBeanName the bean name to the referenced bean
+     * @return if exists, return <code>true</code>, or <code>false</code>
+     * @revised 2.7.6
+     */
     private boolean existsServiceBean(String referencedBeanName) {
-        return applicationContext.containsBean(referencedBeanName);
+        return applicationContext.containsBean(referencedBeanName) &&
+                applicationContext.isTypeMatch(referencedBeanName, ServiceBean.class);
+
     }
 
-    /**
-     * Get or Create a proxy of {@link ReferenceBean} for the specified the type of Dubbo service interface
-     *
-     * @param referencedBeanName   The name of bean that annotated Dubbo's {@link Service @Service} in the Spring {@link ApplicationContext}
-     * @param referenceBeanName    the bean name of {@link ReferenceBean}
-     * @param referenceBean        the instance of {@link ReferenceBean}
-     * @param serviceInterfaceType the type of Dubbo service interface
-     * @return non-null
-     * @since 2.7.4
-     */
-    private Object getOrCreateProxy(String referencedBeanName, String referenceBeanName, ReferenceBean referenceBean, Class<?> serviceInterfaceType) {
-        if (existsServiceBean(referencedBeanName)) { // If the local @Service Bean exists, build a proxy of ReferenceBean
-            return newProxyInstance(getClassLoader(), new Class[]{serviceInterfaceType},
-                    wrapInvocationHandler(referenceBeanName, referenceBean));
-        } else { // ReferenceBean should be initialized and get immediately
-            /**
-             * TODO, if we can make sure this happens after {@link DubboLifecycleComponentApplicationListener},
-             * TODO, then we can avoid starting bootstrap in here, because bootstrap should has been started.
-             */
-            return referenceBean.get();
-        }
+    private boolean isRemoteReferenceBean(AnnotationAttributes attributes) {
+        //TODO Can the interface be called locally when injvm is empty? https://github.com/apache/dubbo/issues/6842
+        boolean remote = Boolean.FALSE.equals(attributes.get("injvm"));
+        return remote;
     }
 
-    /**
-     * Wrap an instance of {@link InvocationHandler} that is used to get the proxy of {@link ReferenceBean} after
-     * the specified local referenced bean that annotated {@link @Service} exported.
-     *
-     * @param referenceBeanName the bean name of {@link ReferenceBean}
-     * @param referenceBean     the instance of {@link ReferenceBean}
-     * @return non-null
-     * @since 2.7.4
-     */
-    private InvocationHandler wrapInvocationHandler(String referenceBeanName, ReferenceBean referenceBean) {
-        return localReferenceBeanInvocationHandlerCache.computeIfAbsent(referenceBeanName, name ->
-                new ReferenceBeanInvocationHandler(referenceBean));
-    }
-
-    private static class ReferenceBeanInvocationHandler implements InvocationHandler {
-
-        private final ReferenceBean referenceBean;
-
-        private Object bean;
-
-        private ReferenceBeanInvocationHandler(ReferenceBean referenceBean) {
-            this.referenceBean = referenceBean;
-        }
-
-        @Override
-        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            Object result;
-            try {
-                if (bean == null) { // If the bean is not initialized, invoke init()
-                    // issue: https://github.com/apache/dubbo/issues/3429
-                    init();
-                }
-                result = method.invoke(bean, args);
-            } catch (InvocationTargetException e) {
-                // re-throws the actual Exception.
-                throw e.getTargetException();
+    private void exportServiceBeanIfNecessary(String referencedBeanName) {
+        if (existsServiceBean(referencedBeanName)) {
+            ServiceBean serviceBean = getServiceBean(referencedBeanName);
+            if (!serviceBean.isExported()) {
+                serviceBean.export();
             }
-            return result;
         }
+    }
 
-        private void init() {
-            this.bean = referenceBean.get();
-        }
+    private ServiceBean getServiceBean(String referencedBeanName) {
+        return applicationContext.getBean(referencedBeanName, ServiceBean.class);
     }
 
     @Override
     protected String buildInjectedObjectCacheKey(AnnotationAttributes attributes, Object bean, String beanName,
-                                                 Class<?> injectedType, InjectionMetadata.InjectedElement injectedElement) {
-        return buildReferencedBeanName(attributes, injectedType) +
-                "#source=" + (injectedElement.getMember()) +
-                "#attributes=" + getAttributes(attributes, getEnvironment());
+                                                 Class<?> injectedType, AnnotatedInjectElement injectedElement) {
+        return generateReferenceBeanName(attributes, injectedType);
     }
 
     /**
@@ -313,68 +389,45 @@ public class ReferenceAnnotationBeanPostProcessor extends AbstractAnnotationBean
         return serviceBeanNameBuilder.build();
     }
 
-    private ReferenceBean buildReferenceBeanIfAbsent(String referenceBeanName, AnnotationAttributes attributes,
-                                                     Class<?> referencedType)
-            throws Exception {
-
-        ReferenceBean<?> referenceBean = referenceBeanCache.get(referenceBeanName);
-
-        if (referenceBean == null) {
-            ReferenceBeanBuilder beanBuilder = ReferenceBeanBuilder
-                    .create(attributes, applicationContext)
-                    .interfaceClass(referencedType);
-            referenceBean = beanBuilder.build();
-            referenceBeanCache.put(referenceBeanName, referenceBean);
-        } else if (!referencedType.isAssignableFrom(referenceBean.getInterfaceClass())) {
-            throw new IllegalArgumentException("reference bean name " + referenceBeanName + " has been duplicated, but interfaceClass " +
-                    referenceBean.getInterfaceClass().getName() + " cannot be assigned to " + referencedType.getName());
-        }
-        return referenceBean;
-    }
-
-    private void cacheInjectedReferenceBean(ReferenceBean referenceBean,
-                                            InjectionMetadata.InjectedElement injectedElement) {
-        if (injectedElement.getMember() instanceof Field) {
-            injectedFieldReferenceBeanCache.put(injectedElement, referenceBean);
-        } else if (injectedElement.getMember() instanceof Method) {
-            injectedMethodReferenceBeanCache.put(injectedElement, referenceBean);
-        }
-    }
-
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
         this.applicationContext = applicationContext;
+        this.referenceBeanManager = applicationContext.getBean(ReferenceBeanManager.BEAN_NAME, ReferenceBeanManager.class);
     }
-
-    @Override
-    public void onApplicationEvent(ApplicationEvent event) {
-        if (event instanceof ServiceBeanExportedEvent) {
-            onServiceBeanExportEvent((ServiceBeanExportedEvent) event);
-        }
-    }
-
-    private void onServiceBeanExportEvent(ServiceBeanExportedEvent event) {
-        ServiceBean serviceBean = event.getServiceBean();
-        initReferenceBeanInvocationHandler(serviceBean);
-    }
-
-    private void initReferenceBeanInvocationHandler(ServiceBean serviceBean) {
-        String serviceBeanName = serviceBean.getBeanName();
-        // Remove ServiceBean when it's exported
-        ReferenceBeanInvocationHandler handler = localReferenceBeanInvocationHandlerCache.remove(serviceBeanName);
-        // Initialize
-        if (handler != null) {
-            handler.init();
-        }
-    }
-
 
     @Override
     public void destroy() throws Exception {
         super.destroy();
-        this.referenceBeanCache.clear();
-        this.localReferenceBeanInvocationHandlerCache.clear();
         this.injectedFieldReferenceBeanCache.clear();
         this.injectedMethodReferenceBeanCache.clear();
+    }
+
+    /**
+     * Gets all beans of {@link ReferenceBean}
+     * @deprecated  use {@link ConfigManager#getReferences()} instead
+     */
+    @Deprecated
+    public Collection<ReferenceBean<?>> getReferenceBeans() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * Get {@link ReferenceBean} {@link Map} in injected field.
+     *
+     * @return non-null {@link Map}
+     * @since 2.5.11
+     */
+    public Map<InjectionMetadata.InjectedElement, ReferenceBean<?>> getInjectedFieldReferenceBeanMap() {
+        return Collections.unmodifiableMap(injectedFieldReferenceBeanCache);
+    }
+
+    /**
+     * Get {@link ReferenceBean} {@link Map} in injected method.
+     *
+     * @return non-null {@link Map}
+     * @since 2.5.11
+     */
+    public Map<InjectionMetadata.InjectedElement, ReferenceBean<?>> getInjectedMethodReferenceBeanMap() {
+        return Collections.unmodifiableMap(injectedMethodReferenceBeanCache);
     }
 }

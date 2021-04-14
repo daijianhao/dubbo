@@ -44,7 +44,7 @@ import static java.util.Optional.empty;
 import static java.util.Optional.of;
 
 /**
- * The decorating implementation of {@link ServiceDiscovery} to publishe the {@link Event Dubbo event} when some actions are
+ * The decorating implementation of {@link ServiceDiscovery} to published the {@link Event Dubbo event} when some actions are
  * executing, including:
  * <ul>
  * <li>Lifecycle actions:</li>
@@ -221,6 +221,31 @@ final class EventPublishingServiceDiscovery implements ServiceDiscovery {
     public void addServiceInstancesChangedListener(ServiceInstancesChangedListener listener) throws NullPointerException, IllegalArgumentException {
         serviceDiscovery.addServiceInstancesChangedListener(listener);
         eventDispatcher.addEventListener(listener);
+    }
+
+    @Override
+    public ServiceInstancesChangedListener createListener(Set<String> serviceNames) {
+        return serviceDiscovery.createListener(serviceNames);
+    }
+
+    @Override
+    public void removeServiceInstancesChangedListener(ServiceInstancesChangedListener listener) throws IllegalArgumentException {
+        serviceDiscovery.removeServiceInstancesChangedListener(listener);
+    }
+
+    @Override
+    public long getDelay() {
+        return serviceDiscovery.getDelay();
+    }
+
+    @Override
+    public URL getUrl() {
+        return serviceDiscovery.getUrl();
+    }
+
+    @Override
+    public ServiceInstance getLocalInstance() {
+        return serviceDiscovery.getLocalInstance();
     }
 
     @Override

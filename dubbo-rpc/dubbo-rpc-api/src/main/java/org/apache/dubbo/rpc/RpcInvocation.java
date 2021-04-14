@@ -30,6 +30,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -51,6 +52,7 @@ public class RpcInvocation implements Invocation, Serializable {
     private static final long serialVersionUID = -4355285085441097045L;
 
     private String targetServiceUniqueName;
+    private String protocolServiceKey;
 
     private String methodName;
     private String serviceName;
@@ -61,9 +63,15 @@ public class RpcInvocation implements Invocation, Serializable {
 
     private Object[] arguments;
 
+    /**
+     * Passed to the remote server during RPC call
+     */
     private Map<String, Object> attachments;
 
-    private Map<Object, Object> attributes = new HashMap<Object, Object>();
+    /**
+     * Only used on the caller side, will not appear on the wire.
+     */
+    private transient Map<Object, Object> attributes = new HashMap<Object, Object>();
 
     private transient Invoker<?> invoker;
 
@@ -77,9 +85,9 @@ public class RpcInvocation implements Invocation, Serializable {
     }
 
     public RpcInvocation(Invocation invocation, Invoker<?> invoker) {
-        this(invocation.getMethodName(), invocation.getServiceName(), invocation.getParameterTypes(),
-                invocation.getArguments(), new HashMap<>(invocation.getAttachments()),
-                invocation.getInvoker());
+        this(invocation.getMethodName(), invocation.getServiceName(), invocation.getProtocolServiceKey(),
+                invocation.getParameterTypes(), invocation.getArguments(), new HashMap<>(invocation.getObjectAttachments()),
+                invocation.getInvoker(), invocation.getAttributes());
         if (invoker != null) {
             URL url = invoker.getUrl();
             setAttachment(PATH_KEY, url.getPath());
@@ -87,10 +95,10 @@ public class RpcInvocation implements Invocation, Serializable {
                 setAttachment(INTERFACE_KEY, url.getParameter(INTERFACE_KEY));
             }
             if (url.hasParameter(GROUP_KEY)) {
-                setAttachment(GROUP_KEY, url.getParameter(GROUP_KEY));
+                setAttachment(GROUP_KEY, url.getGroup());
             }
             if (url.hasParameter(VERSION_KEY)) {
-                setAttachment(VERSION_KEY, url.getParameter(VERSION_KEY, "0.0.0"));
+                setAttachment(VERSION_KEY, url.getVersion("0.0.0"));
             }
             if (url.hasParameter(TIMEOUT_KEY)) {
                 setAttachment(TIMEOUT_KEY, url.getParameter(TIMEOUT_KEY));
@@ -99,42 +107,45 @@ public class RpcInvocation implements Invocation, Serializable {
                 setAttachment(TOKEN_KEY, url.getParameter(TOKEN_KEY));
             }
             if (url.hasParameter(APPLICATION_KEY)) {
-                setAttachment(APPLICATION_KEY, url.getParameter(APPLICATION_KEY));
+                setAttachment(APPLICATION_KEY, url.getApplication());
             }
         }
         this.targetServiceUniqueName = invocation.getTargetServiceUniqueName();
+        this.protocolServiceKey = invocation.getProtocolServiceKey();
     }
 
     public RpcInvocation(Invocation invocation) {
-        this(invocation.getMethodName(), invocation.getServiceName(), invocation.getParameterTypes(),
-                invocation.getArguments(), invocation.getAttachments(), invocation.getInvoker());
+        this(invocation.getMethodName(), invocation.getServiceName(), invocation.getProtocolServiceKey(), invocation.getParameterTypes(),
+                invocation.getArguments(), invocation.getObjectAttachments(), invocation.getInvoker(), invocation.getAttributes());
         this.targetServiceUniqueName = invocation.getTargetServiceUniqueName();
     }
 
-    public RpcInvocation(Method method, String serviceName, Object[] arguments) {
-        this(method, serviceName, arguments, null, null);
+    public RpcInvocation(Method method, String serviceName, String protocolServiceKey, Object[] arguments) {
+        this(method, serviceName, protocolServiceKey, arguments, null, null);
     }
 
-    public RpcInvocation(Method method, String serviceName, Object[] arguments, Map<String, Object> attachment, Map<Object, Object> attributes) {
-        this(method.getName(), serviceName, method.getParameterTypes(), arguments, attachment, null);
+    public RpcInvocation(Method method, String serviceName, String protocolServiceKey, Object[] arguments, Map<String, Object> attachment, Map<Object, Object> attributes) {
+        this(method.getName(), serviceName, protocolServiceKey, method.getParameterTypes(), arguments, attachment, null, attributes);
         this.returnType = method.getReturnType();
-        this.attributes = attributes == null ? new HashMap<>() : attributes;
     }
 
-    public RpcInvocation(String methodName, String serviceName, Class<?>[] parameterTypes, Object[] arguments) {
-        this(methodName, serviceName, parameterTypes, arguments, null, null);
+    public RpcInvocation(String methodName, String serviceName, String protocolServiceKey, Class<?>[] parameterTypes, Object[] arguments) {
+        this(methodName, serviceName, protocolServiceKey, parameterTypes, arguments, null, null, null);
     }
 
-    public RpcInvocation(String methodName, String serviceName, Class<?>[] parameterTypes, Object[] arguments, Map<String, Object> attachments) {
-        this(methodName, serviceName, parameterTypes, arguments, attachments, null);
+    public RpcInvocation(String methodName, String serviceName, String protocolServiceKey, Class<?>[] parameterTypes, Object[] arguments, Map<String, Object> attachments) {
+        this(methodName, serviceName, protocolServiceKey, parameterTypes, arguments, attachments, null, null);
     }
 
-    public RpcInvocation(String methodName, String serviceName, Class<?>[] parameterTypes, Object[] arguments, Map<String, Object> attachments, Invoker<?> invoker) {
+    public RpcInvocation(String methodName, String serviceName, String protocolServiceKey, Class<?>[] parameterTypes, Object[] arguments,
+                         Map<String, Object> attachments, Invoker<?> invoker, Map<Object, Object> attributes) {
         this.methodName = methodName;
         this.serviceName = serviceName;
+        this.protocolServiceKey = protocolServiceKey;
         this.parameterTypes = parameterTypes == null ? new Class<?>[0] : parameterTypes;
         this.arguments = arguments == null ? new Object[0] : arguments;
-        this.attachments = attachments == null ? new HashMap<String, Object>() : attachments;
+        this.attachments = attachments == null ? new HashMap<>() : attachments;
+        this.attributes = attributes == null ? new HashMap<>() : attributes;
         this.invoker = invoker;
         initParameterDesc();
     }
@@ -192,8 +203,17 @@ public class RpcInvocation implements Invocation, Serializable {
     }
 
     @Override
+    public String getProtocolServiceKey() {
+        return protocolServiceKey;
+    }
+
+    @Override
     public String getMethodName() {
         return methodName;
+    }
+
+    public void setMethodName(String methodName) {
+        this.methodName = methodName;
     }
 
     @Override
@@ -203,10 +223,6 @@ public class RpcInvocation implements Invocation, Serializable {
 
     public void setServiceName(String serviceName) {
         this.serviceName = serviceName;
-    }
-
-    public void setMethodName(String methodName) {
-        this.methodName = methodName;
     }
 
     @Override
@@ -246,43 +262,93 @@ public class RpcInvocation implements Invocation, Serializable {
     }
 
     @Override
-    public Map<String, Object> getAttachments() {
+    public Map<String, Object> getObjectAttachments() {
         return attachments;
     }
 
-    public void setAttachments(Map<String, Object> attachments) {
-        this.attachments = attachments == null ? new HashMap<String, Object>() : attachments;
+    public void setObjectAttachments(Map<String, Object> attachments) {
+        this.attachments = attachments == null ? new HashMap<>() : attachments;
     }
 
     @Override
+    public void setAttachment(String key, String value) {
+        setObjectAttachment(key, value);
+    }
+
+    @Deprecated
+    @Override
+    public Map<String, String> getAttachments() {
+        return new AttachmentsAdapter.ObjectToStringMap(attachments);
+    }
+
+    @Deprecated
+    public void setAttachments(Map<String, String> attachments) {
+        this.attachments = attachments == null ? new HashMap<>() : new HashMap<>(attachments);
+    }
+
     public void setAttachment(String key, Object value) {
+        setObjectAttachment(key, value);
+    }
+
+    @Override
+    public void setObjectAttachment(String key, Object value) {
         if (attachments == null) {
-            attachments = new HashMap<String, Object>();
+            attachments = new HashMap<>();
         }
         attachments.put(key, value);
     }
 
     @Override
+    public void setAttachmentIfAbsent(String key, String value) {
+        setObjectAttachmentIfAbsent(key, value);
+    }
+
     public void setAttachmentIfAbsent(String key, Object value) {
+        setObjectAttachmentIfAbsent(key, value);
+    }
+
+    @Override
+    public void setObjectAttachmentIfAbsent(String key, Object value) {
         if (attachments == null) {
-            attachments = new HashMap<String, Object>();
+            attachments = new HashMap<>();
         }
         if (!attachments.containsKey(key)) {
             attachments.put(key, value);
         }
     }
 
-    public void addAttachments(Map<String, Object> attachments) {
+    @Deprecated
+    public void addAttachments(Map<String, String> attachments) {
         if (attachments == null) {
             return;
         }
         if (this.attachments == null) {
-            this.attachments = new HashMap<String, Object>();
+            this.attachments = new HashMap<>();
         }
         this.attachments.putAll(attachments);
     }
 
-    public void addAttachmentsIfAbsent(Map<String, Object> attachments) {
+    public void addObjectAttachments(Map<String, Object> attachments) {
+        if (attachments == null) {
+            return;
+        }
+        if (this.attachments == null) {
+            this.attachments = new HashMap<>();
+        }
+        this.attachments.putAll(attachments);
+    }
+
+    @Deprecated
+    public void addAttachmentsIfAbsent(Map<String, String> attachments) {
+        if (attachments == null) {
+            return;
+        }
+        for (Map.Entry<String, String> entry : attachments.entrySet()) {
+            setAttachmentIfAbsent(entry.getKey(), entry.getValue());
+        }
+    }
+
+    public void addObjectAttachmentsIfAbsent(Map<String, Object> attachments) {
         if (attachments == null) {
             return;
         }
@@ -292,20 +358,55 @@ public class RpcInvocation implements Invocation, Serializable {
     }
 
     @Override
-    public Object getAttachment(String key) {
+    @Deprecated
+    public String getAttachment(String key) {
         if (attachments == null) {
             return null;
         }
-        return attachments.get(key);
+        Object value = attachments.get(key);
+        if (value instanceof String) {
+            return (String) value;
+        }
+        return null;
     }
 
     @Override
-    public Object getAttachment(String key, Object defaultValue) {
+    public Object getObjectAttachment(String key) {
+        if (attachments == null) {
+            return null;
+        }
+        final Object val = attachments.get(key);
+        if (val != null) {
+            return val;
+        }
+        return attachments.get(key.toLowerCase(Locale.ROOT));
+    }
+
+    @Override
+    @Deprecated
+    public String getAttachment(String key, String defaultValue) {
         if (attachments == null) {
             return defaultValue;
         }
         Object value = attachments.get(key);
-        if (null == value) {
+        if (value instanceof String) {
+            String strValue = (String) value;
+            if (StringUtils.isEmpty(strValue)) {
+                return defaultValue;
+            } else {
+                return strValue;
+            }
+        }
+        return null;
+    }
+
+    @Deprecated
+    public Object getObjectAttachment(String key, Object defaultValue) {
+        if (attachments == null) {
+            return defaultValue;
+        }
+        Object value = attachments.get(key);
+        if (value == null) {
             return defaultValue;
         }
         return value;

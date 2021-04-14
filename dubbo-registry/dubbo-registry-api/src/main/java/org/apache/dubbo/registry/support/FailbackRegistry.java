@@ -28,6 +28,7 @@ import org.apache.dubbo.registry.retry.FailedUnregisteredTask;
 import org.apache.dubbo.registry.retry.FailedUnsubscribedTask;
 import org.apache.dubbo.remoting.Constants;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -38,7 +39,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.dubbo.common.constants.CommonConstants.FILE_KEY;
-import static org.apache.dubbo.registry.Constants.CONSUMER_PROTOCOL;
 import static org.apache.dubbo.registry.Constants.DEFAULT_REGISTRY_RETRY_PERIOD;
 import static org.apache.dubbo.registry.Constants.REGISTRY_RETRY_PERIOD_KEY;
 
@@ -244,7 +244,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             // If the startup detection is opened, the Exception is thrown directly.
             boolean check = getUrl().getParameter(Constants.CHECK_KEY, true)
                     && url.getParameter(Constants.CHECK_KEY, true)
-                    && !CONSUMER_PROTOCOL.equals(url.getProtocol());
+                    && !(url.getPort() == 0);
             boolean skipFailback = t instanceof SkipFailbackWrapperException;
             if (check || skipFailback) {
                 if (skipFailback) {
@@ -257,6 +257,25 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
             // Record a failed registration request to a failed list, retry regularly
             addFailedRegistered(url);
+        }
+    }
+
+    @Override
+    public void reExportRegister(URL url) {
+        if (!acceptable(url)) {
+            logger.info("URL " + url + " will not be registered to Registry. Registry " + url + " does not accept service of this protocol type.");
+            return;
+        }
+        super.register(url);
+        removeFailedRegistered(url);
+        removeFailedUnregistered(url);
+        try {
+            // Sending a registration request to the server side
+            doRegister(url);
+        } catch (Exception e) {
+            if (!(e instanceof SkipFailbackWrapperException)) {
+                throw new IllegalStateException("Failed to register (re-export) " + url + " to registry " + getUrl().getAddress() + ", cause: " + e.getMessage(), e);
+            }
         }
     }
 
@@ -274,7 +293,7 @@ public abstract class FailbackRegistry extends AbstractRegistry {
             // If the startup detection is opened, the Exception is thrown directly.
             boolean check = getUrl().getParameter(Constants.CHECK_KEY, true)
                     && url.getParameter(Constants.CHECK_KEY, true)
-                    && !CONSUMER_PROTOCOL.equals(url.getProtocol());
+                    && !(url.getPort() == 0);
             boolean skipFailback = t instanceof SkipFailbackWrapperException;
             if (check || skipFailback) {
                 if (skipFailback) {
@@ -287,6 +306,21 @@ public abstract class FailbackRegistry extends AbstractRegistry {
 
             // Record a failed registration request to a failed list, retry regularly
             addFailedUnregistered(url);
+        }
+    }
+
+    @Override
+    public void reExportUnregister(URL url) {
+        super.unregister(url);
+        removeFailedRegistered(url);
+        removeFailedUnregistered(url);
+        try {
+            // Sending a cancellation request to the server side
+            doUnregister(url);
+        } catch (Exception e) {
+            if (!(e instanceof SkipFailbackWrapperException)) {
+                throw new IllegalStateException("Failed to unregister(re-export) " + url + " to registry " + getUrl().getAddress() + ", cause: " + e.getMessage(), e);
+            }
         }
     }
 
@@ -331,6 +365,9 @@ public abstract class FailbackRegistry extends AbstractRegistry {
         try {
             // Sending a canceling subscription request to the server side
             doUnsubscribe(url, listener);
+            //FIXME, the current thread and the registry event notification thread may have concurrency issue, but when the unsubscribe occurs, we don't care much about the accuracy of the address list.
+            // The notify here is to try its best to clean up the invalid address cache when the unsubscribe action occurs
+            this.notify(url, listener, Collections.emptyList());
         } catch (Exception e) {
             Throwable t = e;
 

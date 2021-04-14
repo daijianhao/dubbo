@@ -243,16 +243,16 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
      *                       side, it is the {@link Class} of the remote service interface
      */
     public void checkStubAndLocal(Class<?> interfaceClass) {
-        if (ConfigUtils.isNotEmpty(local)) {
-            Class<?> localClass = ConfigUtils.isDefault(local) ?
-                    ReflectUtils.forName(interfaceClass.getName() + "Local") : ReflectUtils.forName(local);
-            verify(interfaceClass, localClass);
-        }
-        if (ConfigUtils.isNotEmpty(stub)) {
-            Class<?> localClass = ConfigUtils.isDefault(stub) ?
-                    ReflectUtils.forName(interfaceClass.getName() + "Stub") : ReflectUtils.forName(stub);
-            verify(interfaceClass, localClass);
-        }
+        verifyStubAndLocal(local, "Local", interfaceClass);
+        verifyStubAndLocal(stub, "Stub", interfaceClass);
+    }
+    
+    public void verifyStubAndLocal(String className, String label, Class<?> interfaceClass){
+    	if (ConfigUtils.isNotEmpty(className)) {
+            Class<?> localClass = ConfigUtils.isDefault(className) ?
+                    ReflectUtils.forName(interfaceClass.getName() + label) : ReflectUtils.forName(className);
+                        verify(interfaceClass, localClass);
+            }
     }
 
     private void verify(Class<?> interfaceClass, Class<?> localClass) {
@@ -280,6 +280,8 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
                     RegistryConfig registryConfig = new RegistryConfig();
                     registryConfig.refresh();
                     registryConfigs.add(registryConfig);
+                } else {
+                    registryConfigs = new ArrayList<>(registryConfigs);
                 }
                 setRegistries(registryConfigs);
             }
@@ -449,6 +451,9 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         this.layer = layer;
     }
 
+    /**
+     * Always use the global ApplicationConfig
+     */
     public ApplicationConfig getApplication() {
         if (application != null) {
             return application;
@@ -461,10 +466,11 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         this.application = application;
         if (application != null) {
             ConfigManager configManager = ApplicationModel.getConfigManager();
-            configManager.getApplication().orElseGet(() -> {
+            if (!configManager.getApplication().isPresent()) {
                 configManager.setApplication(application);
-                return application;
-            });
+            } else {
+                application.refresh();
+            }
         }
     }
 

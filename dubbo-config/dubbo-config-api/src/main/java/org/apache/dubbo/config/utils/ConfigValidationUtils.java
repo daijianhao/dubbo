@@ -18,6 +18,7 @@ package org.apache.dubbo.config.utils;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.URLBuilder;
+import org.apache.dubbo.common.config.ConfigurationUtils;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
@@ -86,17 +87,21 @@ import static org.apache.dubbo.common.constants.CommonConstants.SHUTDOWN_WAIT_SE
 import static org.apache.dubbo.common.constants.CommonConstants.THREADPOOL_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.USERNAME_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.VERSION_KEY;
+import static org.apache.dubbo.common.constants.RegistryConstants.DUBBO_PUBLISH_INSTANCE_DEFAULT_KEY;
+import static org.apache.dubbo.common.constants.RegistryConstants.DUBBO_PUBLISH_INTERFACE_DEFAULT_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_PROTOCOL;
+import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_PUBLISH_INSTANCE_KEY;
+import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_PUBLISH_INTERFACE_KEY;
+import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_TYPE_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.SERVICE_REGISTRY_PROTOCOL;
+import static org.apache.dubbo.common.constants.RemotingConstants.BACKUP_KEY;
 import static org.apache.dubbo.common.extension.ExtensionLoader.getExtensionLoader;
-import static org.apache.dubbo.common.utils.UrlUtils.isServiceDiscoveryRegistryType;
 import static org.apache.dubbo.config.Constants.ARCHITECTURE;
 import static org.apache.dubbo.config.Constants.CONTEXTPATH_KEY;
 import static org.apache.dubbo.config.Constants.DUBBO_IP_TO_REGISTRY;
 import static org.apache.dubbo.config.Constants.ENVIRONMENT;
 import static org.apache.dubbo.config.Constants.LAYER_KEY;
-import static org.apache.dubbo.config.Constants.LISTENER_KEY;
 import static org.apache.dubbo.config.Constants.NAME;
 import static org.apache.dubbo.config.Constants.ORGANIZATION;
 import static org.apache.dubbo.config.Constants.OWNER;
@@ -202,7 +207,49 @@ public class ConfigValidationUtils {
                 }
             }
         }
-        return registryList;
+        return genCompatibleRegistries(registryList, provider);
+    }
+
+    private static List<URL> genCompatibleRegistries(List<URL> registryList, boolean provider) {
+        List<URL> result = new ArrayList<>(registryList.size());
+        registryList.forEach(registryURL -> {
+            if (provider) {
+                boolean publishInterface = registryURL.getParameter(REGISTRY_PUBLISH_INTERFACE_KEY, ConfigurationUtils.getDynamicGlobalConfiguration().getBoolean(DUBBO_PUBLISH_INTERFACE_DEFAULT_KEY, true));
+                // for registries enabled service discovery, automatically register interface compatible addresses.
+                if (SERVICE_REGISTRY_PROTOCOL.equals(registryURL.getProtocol())) {
+                    result.add(registryURL);
+                    if (publishInterface && registryNotExists(registryURL, registryList, REGISTRY_PROTOCOL)) {
+                        URL interfaceCompatibleRegistryURL = URLBuilder.from(registryURL)
+                                .setProtocol(REGISTRY_PROTOCOL)
+                                .removeParameter(REGISTRY_TYPE_KEY)
+                                .build();
+                        result.add(interfaceCompatibleRegistryURL);
+                    }
+                } else {
+                    boolean publishInstance = registryURL.getParameter(REGISTRY_PUBLISH_INSTANCE_KEY, ConfigurationUtils.getDynamicGlobalConfiguration().getBoolean(DUBBO_PUBLISH_INSTANCE_DEFAULT_KEY, true));
+                    if (registryNotExists(registryURL, registryList, SERVICE_REGISTRY_PROTOCOL)
+                            && publishInstance) {
+                        URL serviceDiscoveryRegistryURL = URLBuilder.from(registryURL)
+                                .setProtocol(SERVICE_REGISTRY_PROTOCOL)
+                                .removeParameter(REGISTRY_TYPE_KEY)
+                                .build();
+                        result.add(serviceDiscoveryRegistryURL);
+                    }
+                    if (publishInterface) {
+                        result.add(registryURL);
+                    }
+                }
+            } else {
+                result.add(registryURL);
+            }
+        });
+        return result;
+    }
+
+    private static boolean registryNotExists(URL registryURL, List<URL> registryList, String registryType) {
+        return registryList.stream().noneMatch(
+                url -> registryType.equals(url.getProtocol()) && registryURL.getBackupAddress().equals(url.getBackupAddress())
+        );
     }
 
     public static URL loadMonitor(AbstractInterfaceConfig interfaceConfig, URL registryURL) {
@@ -223,10 +270,12 @@ public class ConfigValidationUtils {
         ApplicationConfig application = interfaceConfig.getApplication();
         AbstractConfig.appendParameters(map, monitor);
         AbstractConfig.appendParameters(map, application);
-        String address = monitor.getAddress();
+        String address = null;
         String sysaddress = System.getProperty("dubbo.monitor.address");
         if (sysaddress != null && sysaddress.length() > 0) {
             address = sysaddress;
+        } else if (monitor != null) {
+            address = monitor.getAddress();
         }
         if (ConfigUtils.isNotEmpty(address)) {
             if (!map.containsKey(PROTOCOL_KEY)) {
@@ -237,12 +286,13 @@ public class ConfigValidationUtils {
                 }
             }
             return UrlUtils.parseURL(address, map);
-        } else if ((REGISTRY_PROTOCOL.equals(monitor.getProtocol()) || SERVICE_REGISTRY_PROTOCOL.equals(monitor.getProtocol()))
+        } else if (monitor != null &&
+                (REGISTRY_PROTOCOL.equals(monitor.getProtocol()) || SERVICE_REGISTRY_PROTOCOL.equals(monitor.getProtocol()))
                 && registryURL != null) {
             return URLBuilder.from(registryURL)
                     .setProtocol(DUBBO_PROTOCOL)
                     .addParameter(PROTOCOL_KEY, monitor.getProtocol())
-                    .addParameterAndEncoded(REFER_KEY, StringUtils.toQueryString(map))
+                    .putAttribute(REFER_KEY, StringUtils.toQueryString(map))
                     .build();
         }
         return null;
@@ -296,7 +346,6 @@ public class ConfigValidationUtils {
         checkExtension(ProxyFactory.class, PROXY_KEY, config.getProxy());
         checkExtension(Cluster.class, CLUSTER_KEY, config.getCluster());
         checkMultiExtension(Filter.class, FILE_KEY, config.getFilter());
-        checkMultiExtension(InvokerListener.class, LISTENER_KEY, config.getListener());
         checkNameHasSymbol(LAYER_KEY, config.getLayer());
 
         List<MethodConfig> methods = config.getMethods();
@@ -497,7 +546,12 @@ public class ConfigValidationUtils {
     }
 
     private static String extractRegistryType(URL url) {
-        return isServiceDiscoveryRegistryType(url) ? SERVICE_REGISTRY_PROTOCOL : REGISTRY_PROTOCOL;
+        return UrlUtils.hasServiceDiscoveryRegistryTypeKey(url) ? SERVICE_REGISTRY_PROTOCOL : getRegistryProtocolType(url);
+    }
+
+    private static String getRegistryProtocolType(URL url) {
+        String registryProtocol = url.getParameter("registry-protocol-type");
+        return StringUtils.isNotEmpty(registryProtocol) ? registryProtocol : REGISTRY_PROTOCOL;
     }
 
     public static void checkExtension(Class<?> type, String property, String value) {
@@ -571,7 +625,9 @@ public class ConfigValidationUtils {
             return;
         }
         for (Map.Entry<String, String> entry : parameters.entrySet()) {
-            checkNameHasSymbol(entry.getKey(), entry.getValue());
+            if (!entry.getKey().equals(BACKUP_KEY)) {
+                checkNameHasSymbol(entry.getKey(), entry.getValue());
+            }
         }
     }
 

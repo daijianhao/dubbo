@@ -21,6 +21,7 @@ import org.apache.dubbo.common.context.FrameworkExt;
 import org.apache.dubbo.common.extension.ExtensionLoader;
 import org.apache.dubbo.common.logger.Logger;
 import org.apache.dubbo.common.logger.LoggerFactory;
+import org.apache.dubbo.common.threadpool.manager.ExecutorRepository;
 import org.apache.dubbo.config.ApplicationConfig;
 import org.apache.dubbo.config.context.ConfigManager;
 
@@ -75,7 +76,7 @@ public class ApplicationModel {
         return getServiceRepository().lookupReferredService(serviceKey);
     }
 
-    private static final ExtensionLoader<FrameworkExt> loader = ExtensionLoader.getExtensionLoader(FrameworkExt.class);
+    private static final ExtensionLoader<FrameworkExt> LOADER = ExtensionLoader.getExtensionLoader(FrameworkExt.class);
 
     public static void initFrameworkExts() {
         Set<FrameworkExt> exts = ExtensionLoader.getExtensionLoader(FrameworkExt.class).getSupportedExtensionInstances();
@@ -85,15 +86,19 @@ public class ApplicationModel {
     }
 
     public static Environment getEnvironment() {
-        return (Environment) loader.getExtension(Environment.NAME);
+        return (Environment) LOADER.getExtension(Environment.NAME);
     }
 
     public static ConfigManager getConfigManager() {
-        return (ConfigManager) loader.getExtension(ConfigManager.NAME);
+        return (ConfigManager) LOADER.getExtension(ConfigManager.NAME);
     }
 
     public static ServiceRepository getServiceRepository() {
-        return (ServiceRepository) loader.getExtension(ServiceRepository.NAME);
+        return (ServiceRepository) LOADER.getExtension(ServiceRepository.NAME);
+    }
+
+    public static ExecutorRepository getExecutorRepository() {
+        return ExtensionLoader.getExtensionLoader(ExecutorRepository.class).getDefaultExtension();
     }
 
     public static ApplicationConfig getApplicationConfig() {

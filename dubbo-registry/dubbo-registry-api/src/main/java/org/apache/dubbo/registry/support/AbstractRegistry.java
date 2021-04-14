@@ -54,11 +54,10 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.dubbo.common.constants.CommonConstants.ANY_VALUE;
-import static org.apache.dubbo.common.constants.CommonConstants.APPLICATION_KEY;
 import static org.apache.dubbo.common.constants.CommonConstants.COMMA_SPLIT_PATTERN;
 import static org.apache.dubbo.common.constants.CommonConstants.FILE_KEY;
+import static org.apache.dubbo.common.constants.CommonConstants.REGISTRY_LOCAL_FILE_CACHE_ENABLED;
 import static org.apache.dubbo.common.constants.RegistryConstants.ACCEPTS_KEY;
-import static org.apache.dubbo.common.constants.RegistryConstants.CATEGORY_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.DEFAULT_CATEGORY;
 import static org.apache.dubbo.common.constants.RegistryConstants.DYNAMIC_KEY;
 import static org.apache.dubbo.common.constants.RegistryConstants.EMPTY_PROTOCOL;
@@ -82,7 +81,7 @@ public abstract class AbstractRegistry implements Registry {
     // File cache timing writing
     private final ExecutorService registryCacheExecutor = Executors.newFixedThreadPool(1, new NamedThreadFactory("DubboSaveRegistryCache", true));
     // Is it synchronized to save the file
-    private final boolean syncSaveFile;
+    private boolean syncSaveFile;
     private final AtomicLong lastCacheChanged = new AtomicLong();
     private final AtomicInteger savePropertiesRetryTimes = new AtomicInteger();
     private final Set<URL> registered = new ConcurrentHashSet<>();
@@ -91,27 +90,31 @@ public abstract class AbstractRegistry implements Registry {
     private URL registryUrl;
     // Local disk cache file
     private File file;
+    private boolean localCacheEnabled;
 
     public AbstractRegistry(URL url) {
         setUrl(url);
-        // Start file save timer
-        syncSaveFile = url.getParameter(REGISTRY_FILESAVE_SYNC_KEY, false);
-        String defaultFilename = System.getProperty("user.home") + "/.dubbo/dubbo-registry-" + url.getParameter(APPLICATION_KEY) + "-" + url.getAddress().replaceAll(":", "-") + ".cache";
-        String filename = url.getParameter(FILE_KEY, defaultFilename);
-        File file = null;
-        if (ConfigUtils.isNotEmpty(filename)) {
-            file = new File(filename);
-            if (!file.exists() && file.getParentFile() != null && !file.getParentFile().exists()) {
-                if (!file.getParentFile().mkdirs()) {
-                    throw new IllegalArgumentException("Invalid registry cache file " + file + ", cause: Failed to create directory " + file.getParentFile() + "!");
+        localCacheEnabled = url.getParameter(REGISTRY_LOCAL_FILE_CACHE_ENABLED, true);
+        if (localCacheEnabled) {
+            // Start file save timer
+            syncSaveFile = url.getParameter(REGISTRY_FILESAVE_SYNC_KEY, false);
+            String defaultFilename = System.getProperty("user.home") + "/.dubbo/dubbo-registry-" + url.getApplication() + "-" + url.getAddress().replaceAll(":", "-") + ".cache";
+            String filename = url.getParameter(FILE_KEY, defaultFilename);
+            File file = null;
+            if (ConfigUtils.isNotEmpty(filename)) {
+                file = new File(filename);
+                if (!file.exists() && file.getParentFile() != null && !file.getParentFile().exists()) {
+                    if (!file.getParentFile().mkdirs()) {
+                        throw new IllegalArgumentException("Invalid registry cache file " + file + ", cause: Failed to create directory " + file.getParentFile() + "!");
+                    }
                 }
             }
+            this.file = file;
+            // When starting the subscription center,
+            // we need to read the local cache file for future Registry fault tolerance processing.
+            loadProperties();
+            notify(url.getBackupUrls());
         }
-        this.file = file;
-        // When starting the subscription center,
-        // we need to read the local cache file for future Registry fault tolerance processing.
-        loadProperties();
-        notify(url.getBackupUrls());
     }
 
     protected static List<URL> filterEmpty(URL url, List<URL> urls) {
@@ -214,7 +217,7 @@ public abstract class AbstractRegistry implements Registry {
                 in = new FileInputStream(file);
                 properties.load(in);
                 if (logger.isInfoEnabled()) {
-                    logger.info("Load registry cache file " + file + ", data: " + properties);
+                    logger.info("Loaded registry cache file " + file);
                 }
             } catch (Throwable e) {
                 logger.warn("Failed to load registry cache file " + file, e);
@@ -281,8 +284,10 @@ public abstract class AbstractRegistry implements Registry {
         if (url == null) {
             throw new IllegalArgumentException("register url == null");
         }
-        if (logger.isInfoEnabled()) {
-            logger.info("Register: " + url);
+        if (url.getPort() != 0) {
+            if (logger.isInfoEnabled()) {
+                logger.info("Register: " + url);
+            }
         }
         registered.add(url);
     }
@@ -292,8 +297,10 @@ public abstract class AbstractRegistry implements Registry {
         if (url == null) {
             throw new IllegalArgumentException("unregister url == null");
         }
-        if (logger.isInfoEnabled()) {
-            logger.info("Unregister: " + url);
+        if (url.getPort() != 0) {
+            if (logger.isInfoEnabled()) {
+                logger.info("Unregister: " + url);
+            }
         }
         registered.remove(url);
     }
@@ -401,13 +408,13 @@ public abstract class AbstractRegistry implements Registry {
             return;
         }
         if (logger.isInfoEnabled()) {
-            logger.info("Notify urls for subscribe url " + url + ", urls: " + urls);
+            logger.info("Notify urls for subscribe url " + url + ", url size: " + urls.size());
         }
         // keep every provider's category.
         Map<String, List<URL>> result = new HashMap<>();
         for (URL u : urls) {
             if (UrlUtils.isMatch(url, u)) {
-                String category = u.getParameter(CATEGORY_KEY, DEFAULT_CATEGORY);
+                String category = u.getCategory(DEFAULT_CATEGORY);
                 List<URL> categoryList = result.computeIfAbsent(category, k -> new ArrayList<>());
                 categoryList.add(u);
             }
@@ -423,7 +430,9 @@ public abstract class AbstractRegistry implements Registry {
             listener.notify(categoryList);
             // We will update our cache file after each notification.
             // When our Registry has a subscribe failure due to network jitter, we can return at least the existing cache URL.
-            saveProperties(url);
+            if (localCacheEnabled) {
+                saveProperties(url);
+            }
         }
     }
 
@@ -493,6 +502,7 @@ public abstract class AbstractRegistry implements Registry {
                 }
             }
         }
+        AbstractRegistryFactory.removeDestroyedRegistry(this);
     }
 
     protected boolean acceptable(URL urlToRegistry) {

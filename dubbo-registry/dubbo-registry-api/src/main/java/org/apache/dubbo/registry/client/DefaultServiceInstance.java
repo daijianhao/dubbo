@@ -16,9 +16,20 @@
  */
 package org.apache.dubbo.registry.client;
 
+import org.apache.dubbo.metadata.MetadataInfo;
+
+import com.alibaba.fastjson.JSON;
+import org.eclipse.collections.impl.map.mutable.UnifiedMap;
+
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.SortedMap;
+import java.util.TreeMap;
+
+import static org.apache.dubbo.common.constants.CommonConstants.REVISION_KEY;
+import static org.apache.dubbo.registry.client.metadata.ServiceInstanceMetadataUtils.ENDPOINTS;
 
 /**
  * The default implementation of {@link ServiceInstance}.
@@ -29,28 +40,46 @@ public class DefaultServiceInstance implements ServiceInstance {
 
     private static final long serialVersionUID = 1149677083747278100L;
 
-    private String id;
-
     private String serviceName;
 
     private String host;
 
-    private Integer port;
+    private int port;
 
     private boolean enabled;
 
     private boolean healthy;
 
-    private Map<String, String> metadata = new HashMap<>();
+    private Map<String, String> metadata = new UnifiedMap<>();
+
+    private transient String address;
+    private transient MetadataInfo serviceMetadata;
+    // used at runtime
+    private transient String registryCluster; // extendParams can be more flexiable, but one single property uses less space
+    private transient Map<String, String> extendParams;
+    private transient List<Endpoint> endpoints;
 
     public DefaultServiceInstance() {
     }
 
-    public DefaultServiceInstance(String id, String serviceName, String host, Integer port) {
+    public DefaultServiceInstance(DefaultServiceInstance other) {
+        this.serviceName = other.serviceName;
+        this.host = other.host;
+        this.port = other.port;
+        this.enabled = other.enabled;
+        this.healthy = other.healthy;
+        this.metadata = other.metadata;
+        this.serviceMetadata = other.serviceMetadata;
+        this.registryCluster = other.registryCluster;
+        this.extendParams = other.extendParams;
+        this.endpoints = other.endpoints;
+        this.address = null;
+    }
+
+    public DefaultServiceInstance(String serviceName, String host, Integer port) {
         if (port != null && port.intValue() < 1) {
             throw new IllegalArgumentException("The port must be greater than zero!");
         }
-        this.id = id;
         this.serviceName = serviceName;
         this.host = host;
         this.port = port;
@@ -58,12 +87,8 @@ public class DefaultServiceInstance implements ServiceInstance {
         this.healthy = true;
     }
 
-    public DefaultServiceInstance(String serviceName, String host, Integer port) {
-        this(host + ":" + port, serviceName, host, port);
-    }
-
-    public void setId(String id) {
-        this.id = id;
+    public DefaultServiceInstance(String serviceName) {
+        this.serviceName = serviceName;
     }
 
     public void setServiceName(String serviceName) {
@@ -72,11 +97,6 @@ public class DefaultServiceInstance implements ServiceInstance {
 
     public void setHost(String host) {
         this.host = host;
-    }
-
-    @Override
-    public String getId() {
-        return id;
     }
 
     @Override
@@ -89,13 +109,25 @@ public class DefaultServiceInstance implements ServiceInstance {
         return host;
     }
 
-    public void setPort(Integer port) {
+    public void setPort(int port) {
         this.port = port;
     }
 
     @Override
-    public Integer getPort() {
+    public int getPort() {
         return port;
+    }
+
+    @Override
+    public String getAddress() {
+        if (address == null) {
+            address = getAddress(host, port);
+        }
+        return address;
+    }
+
+    private static String getAddress(String host, int port) {
+        return port <= 0 ? host : host + ':' + port;
     }
 
     @Override
@@ -121,8 +153,68 @@ public class DefaultServiceInstance implements ServiceInstance {
         return metadata;
     }
 
+    @Override
+    public SortedMap<String, String> getSortedMetadata() {
+        return new TreeMap<>(getMetadata());
+    }
+
+    @Override
+    public String getRegistryCluster() {
+        return registryCluster;
+    }
+
+    public void setRegistryCluster(String registryCluster) {
+        this.registryCluster = registryCluster;
+    }
+
+    @Override
+    public Map<String, String> getExtendParams() {
+        if (extendParams == null) {
+            extendParams = new HashMap<>();
+        }
+        return extendParams;
+    }
+
+    public List<Endpoint> getEndpoints() {
+        if (endpoints != null) {
+            return endpoints;
+        }
+        return JSON.parseArray(metadata.get(ENDPOINTS), Endpoint.class);
+    }
+
+    public DefaultServiceInstance copy(Endpoint endpoint) {
+        DefaultServiceInstance copyOfInstance = new DefaultServiceInstance(this);
+        copyOfInstance.setPort(endpoint.getPort());
+        return copyOfInstance;
+    }
+
+    @Override
+    public Map<String, String> getAllParams() {
+        if (extendParams == null) {
+            return metadata;
+        } else {
+            Map<String, String> allParams = new HashMap<>((int) ((metadata.size() + extendParams.size()) / 0.75f + 1));
+            allParams.putAll(metadata);
+            allParams.putAll(extendParams);
+            return allParams;
+        }
+    }
+
     public void setMetadata(Map<String, String> metadata) {
         this.metadata = metadata;
+    }
+
+    public MetadataInfo getServiceMetadata() {
+        return serviceMetadata;
+    }
+
+    public void setServiceMetadata(MetadataInfo serviceMetadata) {
+        this.serviceMetadata = serviceMetadata;
+    }
+
+    @Override
+    public InstanceAddressURL toURL() {
+        return new InstanceAddressURL(this, serviceMetadata);
     }
 
     @Override
@@ -130,24 +222,34 @@ public class DefaultServiceInstance implements ServiceInstance {
         if (this == o) return true;
         if (!(o instanceof DefaultServiceInstance)) return false;
         DefaultServiceInstance that = (DefaultServiceInstance) o;
-        return isEnabled() == that.isEnabled() &&
-                isHealthy() == that.isHealthy() &&
-                Objects.equals(getId(), that.getId()) &&
-                Objects.equals(getServiceName(), that.getServiceName()) &&
+        boolean equals = Objects.equals(getServiceName(), that.getServiceName()) &&
                 Objects.equals(getHost(), that.getHost()) &&
-                Objects.equals(getPort(), that.getPort()) &&
-                Objects.equals(getMetadata(), that.getMetadata());
+                Objects.equals(getPort(), that.getPort());
+        for (Map.Entry<String, String> entry : this.getMetadata().entrySet()) {
+            if (entry.getKey().equals(REVISION_KEY)) {
+                continue;
+            }
+            equals = equals && entry.getValue().equals(that.getMetadata().get(entry.getKey()));
+        }
+
+        return equals;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(getId(), getServiceName(), getHost(), getPort(), isEnabled(), isHealthy(), getMetadata());
+        int result = Objects.hash(getServiceName(), getHost(), getPort());
+        for (Map.Entry<String, String> entry : this.getMetadata().entrySet()) {
+            if (entry.getKey().equals(REVISION_KEY)) {
+                continue;
+            }
+            result = 31 * result + (entry.getValue() == null ? 0 : entry.getValue().hashCode());
+        }
+        return result;
     }
 
     @Override
     public String toString() {
         return "DefaultServiceInstance{" +
-                "id='" + id + '\'' +
                 ", serviceName='" + serviceName + '\'' +
                 ", host='" + host + '\'' +
                 ", port=" + port +
@@ -155,5 +257,31 @@ public class DefaultServiceInstance implements ServiceInstance {
                 ", healthy=" + healthy +
                 ", metadata=" + metadata +
                 '}';
+    }
+
+    public static class Endpoint {
+        Integer port;
+        String protocol;
+
+        public Endpoint(Integer port, String protocol) {
+            this.port = port;
+            this.protocol = protocol;
+        }
+
+        public Integer getPort() {
+            return port;
+        }
+
+        public void setPort(Integer port) {
+            this.port = port;
+        }
+
+        public String getProtocol() {
+            return protocol;
+        }
+
+        public void setProtocol(String protocol) {
+            this.protocol = protocol;
+        }
     }
 }
